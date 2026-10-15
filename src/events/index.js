@@ -5,17 +5,24 @@
 
 import { weightedPick } from '../rng.js';
 import { read } from './read.js';
+import { tugOfWar } from './tugOfWar.js';
+import { overloadSurge } from './overloadSurge.js';
 
 /** id -> event module. */
 export const CLASH_EVENTS = Object.freeze({
   [read.id]: read,
+  [tugOfWar.id]: tugOfWar,
+  [overloadSurge.id]: overloadSurge,
 });
 
 /**
  * Relative likelihood of each event. The Read is reserved for heavy telegraphs and is
  * never drawn at random, so it carries no weight here.
  */
-export const CLASH_WEIGHTS = Object.freeze({});
+export const CLASH_WEIGHTS = Object.freeze({
+  [tugOfWar.id]: 2,
+  [overloadSurge.id]: 2,
+});
 
 /**
  * @param {number} rngState
