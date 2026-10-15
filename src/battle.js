@@ -19,18 +19,23 @@ import {
   applyElementStatus, tickStatuses, hasStatus, consumeStatus,
   effectiveDefense, burnDamage, GUST_EVADE_CHANCE, DRENCH_CHARGE_LOSS,
 } from './status.js';
-import { ACTION_MULT, chooseAction } from './actions.js';
+import { ACTION_MULT, chooseAction, resolveStances } from './actions.js';
 import { scheduleNextAction, dueFighters } from './timeline.js';
+import { applyClashScores } from './momentum.js';
+import { weightedPick } from './rng.js';
+import { CLASH_EVENTS, CLASH_WEIGHTS } from './events/index.js';
+import { read } from './events/read.js';
 import {
   ENGINE_VERSION, INTRO_MS, MAX_TICK_STEP_MS, MAX_BATTLE_MS,
   SURGE_CHARGES_REQUIRED, SUDDEN_DEATH_START_MS, BIG_HIT_FRACTION,
+  CLASH_CHANCE, LOW_HP_FRACTION,
 } from './constants.js';
 
 /**
  * @param {{seed: string, a: object, b: object}} args fighters come from stats.toFighter
  * @returns {object} battle state
  */
-export function createBattle({ seed, a, b }) {
+export function createBattle({ seed, a, b, clashRegistry }) {
   const combatA = deriveCombat(a, b.element);
   const combatB = deriveCombat(b, a.element);
 
@@ -50,6 +55,7 @@ export function createBattle({ seed, a, b }) {
     momentum: MOMENTUM_START,
     surge: 0,
     statuses: [],
+    pendingBuff: null,
     nextActionAt: Infinity,
     actionsTaken: 0,
   });
@@ -65,6 +71,31 @@ export function createBattle({ seed, a, b }) {
     endReason: null,
     actionCount: 0,
     suddenDeathAnnounced: false,
+    firstBloodDone: false,
+    reelingClashDone: false,
+    clash: null,
+    registry: {
+      events: clashRegistry?.events ?? CLASH_EVENTS,
+      weights: clashRegistry?.weights ?? CLASH_WEIGHTS,
+    },
+  };
+}
+
+/**
+ * Reattaches the non-serialisable registry after a Durable Object restores state from
+ * storage. `state.registry` holds functions, so it does not survive JSON; everything else
+ * does.
+ * @param {object} state
+ * @param {{events?: object, weights?: object}} [clashRegistry]
+ * @returns {object}
+ */
+export function rehydrate(state, clashRegistry) {
+  return {
+    ...state,
+    registry: {
+      events: clashRegistry?.events ?? CLASH_EVENTS,
+      weights: clashRegistry?.weights ?? CLASH_WEIGHTS,
+    },
   };
 }
 
@@ -74,8 +105,11 @@ export function createBattle({ seed, a, b }) {
  * @returns {{state: object, events: object[]}}
  */
 export function step(state, input) {
-  if (!input || input.type !== 'tick') return { state, events: [] };
+  if (!input) return { state, events: [] };
   if (state.phase === 'ended') return { state, events: [] };
+
+  if (input.type === 'clashInput') return applyClashInput(state, input);
+  if (input.type !== 'tick') return { state, events: [] };
 
   // Review Focus 5: a backwards tick (clock skew) changes nothing, and a very large jump
   // (a Durable Object waking from hibernation) advances by one bounded slice only, so a
@@ -89,6 +123,30 @@ export function step(state, input) {
   return { state: next, events };
 }
 
+/**
+ * Review Focus 3: clash input outside the open window changes nothing at all — not the
+ * event state, not the clock, not the returned events.
+ */
+function applyClashInput(state, input) {
+  const clash = state.clash;
+  if (state.phase !== 'clash' || !clash) return { state, events: [] };
+  if (input.player !== 'a' && input.player !== 'b') return { state, events: [] };
+  const atMs = Number(input.atMs);
+  if (!Number.isFinite(atMs) || atMs < clash.startedAt || atMs > clash.endsAt) {
+    return { state, events: [] };
+  }
+
+  const event = state.registry.events[clash.id];
+  if (!event) return { state, events: [] };
+
+  const next = cloneState(state);
+  next.clash = {
+    ...clash,
+    eventState: event.reduce(clash.eventState, { player: input.player, payload: input.payload, atMs }),
+  };
+  return { state: next, events: [] };
+}
+
 /** Structured clone of the parts that change. Cheap: the state is small and flat. */
 function cloneState(state) {
   return {
@@ -99,11 +157,25 @@ function cloneState(state) {
       combat: { ...f.combat },
       sets: { ...f.sets },
       statuses: f.statuses.map((s) => ({ ...s })),
+      pendingBuff: f.pendingBuff ? { ...f.pendingBuff } : null,
     })),
+    clash: state.clash ? { ...state.clash } : null,
   };
 }
 
 function advanceTo(state, target, events) {
+  // Bullet time: the fight is frozen until the event's window closes.
+  if (state.phase === 'clash') {
+    const clash = state.clash;
+    if (target < clash.endsAt) {
+      state.clockMs = target;
+      return;
+    }
+    state.clockMs = clash.endsAt;
+    resolveClash(state, events);
+    if (state.phase === 'ended') return;
+  }
+
   if (state.phase === 'intro') {
     if (target < INTRO_MS) {
       state.clockMs = target;
@@ -121,7 +193,7 @@ function advanceTo(state, target, events) {
 
   // Resolve every action whose gauge filled inside this slice, in time order.
   for (let guard = 0; guard < 16; guard++) {
-    if (state.phase === 'ended') return;
+    if (state.phase === 'ended' || state.phase === 'clash') return;
     const due = dueFighters(state.fighters, target);
     if (due.length === 0) break;
     const index = due[0];
@@ -130,11 +202,166 @@ function advanceTo(state, target, events) {
     resolveAction(state, index, events);
   }
 
-  if (state.phase === 'ended') return;
+  if (state.phase === 'ended' || state.phase === 'clash') return;
   state.clockMs = target;
   announceSuddenDeath(state, events);
 
   if (state.clockMs >= MAX_BATTLE_MS) endByTimeout(state, events);
+}
+
+/** Opens a clash event: the fight freezes until its window closes. */
+function startClash(state, id, ctx, events) {
+  const event = state.registry.events[id];
+  if (!event) return;
+  const init = event.init(state.rng, ctx);
+  state.rng = init.state;
+  state.clash = {
+    id,
+    eventState: init.value,
+    startedAt: state.clockMs,
+    endsAt: state.clockMs + event.durationMs,
+  };
+  state.phase = 'clash';
+  events.push({
+    t: state.clockMs,
+    type: 'clashStart',
+    id,
+    endsAt: state.clash.endsAt,
+    durationMs: event.durationMs,
+  });
+}
+
+/** Closes the window, applies every effect the event returned, and resumes the fight. */
+function resolveClash(state, events) {
+  const clash = state.clash;
+  const event = state.registry.events[clash.id];
+  const outcome = event.score(clash.eventState);
+
+  // Quake halves the score of a robot that was staggered.
+  const scores = {
+    a: hasStatus(state.fighters[0].statuses, 'quake') ? outcome.a / 2 : outcome.a,
+    b: hasStatus(state.fighters[1].statuses, 'quake') ? outcome.b / 2 : outcome.b,
+  };
+
+  const momenta = applyClashScores(
+    { a: state.fighters[0].momentum, b: state.fighters[1].momentum },
+    scores,
+    event.momentumShift,
+  );
+  state.fighters[0].momentum = momenta.a;
+  state.fighters[1].momentum = momenta.b;
+
+  events.push({
+    t: state.clockMs,
+    type: 'clashEnd',
+    id: clash.id,
+    scores,
+    momentum: momenta,
+  });
+
+  if (outcome.buffs) {
+    applyBuff(state, 0, outcome.buffs.a, events);
+    applyBuff(state, 1, outcome.buffs.b, events);
+  }
+
+  state.phase = 'fighting';
+  const pausedFor = clash.endsAt - clash.startedAt;
+  state.clash = null;
+  // Push both gauges back by the frozen time so the resume is not a burst.
+  for (const fighter of state.fighters) {
+    fighter.nextActionAt = Math.max(fighter.nextActionAt + pausedFor, state.clockMs + 1);
+  }
+
+  if (outcome.exchange) {
+    runExchange(state, outcome.exchange, events);
+    if (state.phase === 'ended') return;
+  }
+
+  if (outcome.bonusHit) {
+    const target = outcome.bonusHit.target;
+    const attacker = state.fighters[1 - target];
+    const defender = state.fighters[target];
+    const roll = rollDamage(state.rng, {
+      atk: attacker.combat.atk,
+      def: effectiveDefense(defender.statuses, defender.combat.def),
+      actionMult: outcome.bonusHit.mult,
+      momentum: attacker.momentum,
+      elapsedMs: state.clockMs,
+    });
+    state.rng = roll.state;
+    if (roll.value > 0) applyDamage(state, target, roll.value, 'clash', events);
+  }
+}
+
+function applyBuff(state, index, buff, events) {
+  if (!buff) return;
+  const fighter = state.fighters[index];
+  if (buff.surge) {
+    fighter.surge += buff.surge;
+    events.push({ t: state.clockMs, type: 'surge', fighter: index, charges: fighter.surge });
+  }
+  const carried = {};
+  if (buff.atkMult) carried.atkMult = buff.atkMult;
+  if (buff.defMult) carried.defMult = buff.defMult;
+  if (buff.surge) carried.surge = buff.surge;
+  fighter.pendingBuff = Object.keys(carried).length > 0 ? carried : null;
+}
+
+/** The Read: both committed stances resolve into one simultaneous exchange. */
+function runExchange(state, exchange, events) {
+  const resolved = resolveStances(exchange.a, exchange.b);
+  const hits = [];
+  for (const index of [0, 1]) {
+    const side = index === 0 ? resolved.a : resolved.b;
+    const otherSide = index === 0 ? resolved.b : resolved.a;
+    if (side.damageMult === 0) continue;
+    const attacker = state.fighters[index];
+    const defender = state.fighters[1 - index];
+    const roll = rollDamage(state.rng, {
+      atk: attacker.combat.atk,
+      def: effectiveDefense(defender.statuses, defender.combat.def),
+      actionMult: side.damageMult * otherSide.takenMult,
+      momentum: attacker.momentum,
+      elapsedMs: state.clockMs,
+    });
+    state.rng = roll.state;
+    hits.push({ target: 1 - index, amount: roll.value });
+  }
+  events.push({
+    t: state.clockMs,
+    type: 'exchange',
+    stances: exchange,
+    outcome: resolved.outcome,
+  });
+  // Simultaneous: both hits land even if one is lethal.
+  for (const hit of hits) {
+    if (hit.amount > 0) applyDamage(state, hit.target, hit.amount, 'exchange', events);
+  }
+}
+
+/**
+ * Spec section 4: ~20% of action resolutions, plus a forced event at first blood and when
+ * either robot drops below a quarter HP.
+ */
+function maybeStartClash(state, events) {
+  if (state.phase !== 'fighting' || state.clash) return;
+
+  const reeling = state.fighters.some((f) => f.hp > 0 && f.hp / f.maxHp <= LOW_HP_FRACTION);
+  const firstBlood = !state.firstBloodDone && state.fighters.some((f) => f.hp < f.maxHp);
+  if (firstBlood) state.firstBloodDone = true;
+
+  const forced = firstBlood || (reeling && !state.reelingClashDone);
+  if (reeling) state.reelingClashDone = true;
+
+  const roll = nextRandom(state.rng);
+  state.rng = roll.state;
+  if (!forced && roll.value >= CLASH_CHANCE) return;
+
+  const entries = Object.entries(state.registry.weights).filter(([id]) => state.registry.events[id]);
+  if (entries.length === 0) return;
+  const picked = weightedPick(state.rng, entries);
+  state.rng = picked.state;
+  startClash(state, picked.value, { heavyBy: null }, events);
 }
 
 function announceSuddenDeath(state, events) {
@@ -183,6 +410,17 @@ function resolveAction(state, index, events) {
   // defender banks a surge charge for reading it.
   const isHeavy = action === 'heavy';
   const isSurge = action === 'surge';
+
+  // A heavy swing telegraphs: it opens a Read instead of resolving directly. The
+  // actionsTaken increment above already counted it, and skipClashRoll keeps
+  // finishAction from starting a random event that startClash would overwrite.
+  if (isHeavy && state.registry.events[read.id]) {
+    events.push({ t: state.clockMs, type: 'action', fighter: index, action: 'telegraph' });
+    finishAction(state, index, events, { skipClashRoll: true });
+    startClash(state, read.id, { heavyBy: index }, events);
+    return;
+  }
+
   const actionMult = isHeavy ? ACTION_MULT.overload : isSurge ? ACTION_MULT.surge : ACTION_MULT.strike;
 
   if (isSurge) {
@@ -192,14 +430,17 @@ function resolveAction(state, index, events) {
     defender.surge += 1;
   }
 
+  const buff = attacker.pendingBuff ?? {};
+  const defenderBuff = defender.pendingBuff ?? {};
   const roll = rollDamage(state.rng, {
     atk: attacker.combat.atk,
-    def: effectiveDefense(defender.statuses, defender.combat.def),
-    actionMult,
+    def: effectiveDefense(defender.statuses, defender.combat.def) * (defenderBuff.defMult ?? 1),
+    actionMult: actionMult * (buff.atkMult ?? 1),
     momentum: attacker.momentum,
     elapsedMs: state.clockMs,
   });
   state.rng = roll.state;
+  attacker.pendingBuff = null;
 
   // Gust: one chance to evade, consumed whether or not it fires.
   let damage = roll.value;
@@ -247,7 +488,7 @@ function resolveAction(state, index, events) {
 }
 
 /** Statuses on the acting robot count down on its own actions, then the gauge resets. */
-function finishAction(state, index, events) {
+function finishAction(state, index, events, { skipClashRoll = false } = {}) {
   const attacker = state.fighters[index];
   const before = attacker.statuses.map((s) => s.id);
   attacker.statuses = tickStatuses(attacker.statuses);
@@ -261,6 +502,8 @@ function finishAction(state, index, events) {
   attacker.nextActionAt = schedule.value;
   state.rng = schedule.state;
   state.actionCount += 1;
+
+  if (!skipClashRoll) maybeStartClash(state, events);
 }
 
 function applyDamage(state, index, amount, source, events) {

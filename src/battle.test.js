@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert';
-import { createBattle, step } from './battle.js';
+import { createBattle, step, rehydrate } from './battle.js';
 import { toFighter } from './stats.js';
 import { INTRO_MS, MAX_TICK_STEP_MS, MAX_BATTLE_MS, ENGINE_VERSION } from './constants.js';
 
@@ -201,9 +201,11 @@ test('an unknown input type is ignored', () => {
 });
 
 test('battle state survives a JSON round trip', () => {
-  let state = createBattle({ seed: 'json', a: fighter(), b: fighter({ asset_id: '2' }) });
-  state = step(state, { type: 'tick', toMs: 8000 }).state;
-  const revived = JSON.parse(JSON.stringify(state));
+  // state.registry holds functions, which JSON drops — rehydrate() puts them back, which
+  // is exactly what the Durable Object does when it restores a battle from storage.
+  const fresh = createBattle({ seed: 'json', a: fighter(), b: fighter({ asset_id: '2' }) });
+  const state = advanceClock(fresh, 8000).state;
+  const revived = rehydrate(JSON.parse(JSON.stringify(state)));
   const fromOriginal = step(state, { type: 'tick', toMs: 12_000 });
   const fromRevived = step(revived, { type: 'tick', toMs: 12_000 });
   assert.deepEqual(fromRevived.events, fromOriginal.events);
