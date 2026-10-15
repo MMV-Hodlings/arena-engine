@@ -57,12 +57,27 @@ test('a maximally competent AI scores near the top', () => {
   assert.ok(scoreOf('reflexStrike', planned.value, clash).b > 0.85);
 });
 
-test('the AI never exceeds the tap clamp', () => {
+test('the AI never exceeds the tap clamp across the event', () => {
   const clash = clashFor('tugOfWar');
   const planned = planClashInputs(clash, 'b', { competence: 1 }, hashSeed('taps'));
-  for (const input of planned.value) {
-    const rate = input.payload.taps / (input.payload.windowMs / 1000);
-    assert.ok(rate <= 12 + 1e-9, `planned ${rate} taps per second`);
+  const total = planned.value.reduce((sum, input) => sum + input.payload.taps, 0);
+  const seconds = (clash.endsAt - clash.startedAt) / 1000;
+  assert.ok(total / seconds <= 12 + 1e-9, `planned ${(total / seconds).toFixed(2)} taps per second`);
+});
+
+test('AI mashing competence is not quantised away', () => {
+  // Every competence step must produce a materially different tap total, or the harness
+  // cannot tell a good masher from a mediocre one â€” and two equal AIs always tie.
+  const totals = [0.25, 0.5, 0.75, 1].map((competence) => {
+    const clash = clashFor('tugOfWar');
+    const planned = planClashInputs(clash, 'b', { competence }, hashSeed(`q-${competence}`));
+    return planned.value.reduce((sum, input) => sum + input.payload.taps, 0);
+  });
+  for (let i = 1; i < totals.length; i++) {
+    assert.ok(
+      totals[i] > totals[i - 1] * 1.1,
+      `competence steps produced ${totals.join(', ')} taps â€” not meaningfully distinct`,
+    );
   }
 });
 
@@ -84,17 +99,33 @@ test('posture selection returns a real posture', () => {
   assert.ok(['aggressive', 'balanced', 'defensive'].includes(chosen.value));
 });
 
-test('the stance triangle has no dominant option, so a Read cannot be out-skilled in isolation', () => {
-  // This is why the competence test above excludes the Read. Every stance has the same
-  // expected score against a uniform opponent: the only edge available is reading the
-  // person, which is exactly what the spec intends by leaving reads outside the skill cap.
+test('the stance payoff table is pinned, skew included', () => {
+  // This replaces an earlier test that summed only the MOMENTUM score (1 / 0.5 / 0) over
+  // the three opposing stances. That sum is 0.5 for ANY proper rock-paper-scissors cycle,
+  // so it could not fail for any payoff table — it proved nothing, and the ruling built on
+  // it ("the triangle has no dominant option") was wrong.
+  //
+  // The Read's real effect is the damage exchange, so that is what gets measured here:
+  // expected net damage per Read against an opponent picking uniformly. The current table
+  // is NOT balanced — overload is the strongest pick and guard the weakest — and that skew
+  // is inherited verbatim from spec section 3.7. It is pinned rather than corrected,
+  // because changing it is a spec decision, and pinned rather than ignored, because the
+  // numbers below are what an exploitable Read looks like.
   const stances = ['strike', 'guard', 'overload'];
+  const payoff = {};
   for (const mine of stances) {
-    let total = 0;
+    let net = 0;
     for (const theirs of stances) {
       const resolved = resolveStances(mine, theirs);
-      total += resolved.outcome === 'tie' ? 0.5 : resolved.outcome === 'a' ? 1 : 0;
+      net += resolved.a.damageMult * resolved.b.takenMult - resolved.b.damageMult * resolved.a.takenMult;
     }
-    assert.ok(Math.abs(total / stances.length - 0.5) < 1e-9, `${mine} is dominant or dominated`);
+    payoff[mine] = net / stances.length;
   }
+
+  assert.ok(Math.abs(payoff.overload - 0.4667) < 0.01, `overload payoff moved: ${payoff.overload}`);
+  assert.ok(Math.abs(payoff.strike - 0.0333) < 0.01, `strike payoff moved: ${payoff.strike}`);
+  assert.ok(Math.abs(payoff.guard + 0.5) < 0.01, `guard payoff moved: ${payoff.guard}`);
+
+  const best = stances.reduce((x, y) => (payoff[x] >= payoff[y] ? x : y));
+  assert.equal(best, 'overload', 'the dominant stance changed - re-check the spec table');
 });

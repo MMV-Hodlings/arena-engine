@@ -23,24 +23,34 @@ function clamp01(value) {
   return Math.max(0, Math.min(1, value));
 }
 
-/** Mashing plan: one aggregated message every 100ms, as a real client would send. */
+/**
+ * Mashing plan: one aggregated message every 100ms, as a real client would send.
+ *
+ * Taps are carried as a running fraction rather than rounded per window. Rounding each
+ * window independently quantised the whole policy — at 100ms windows every competence
+ * from 0.45 upwards rounded to exactly one tap, so a competence-0.5 and a competence-1.0
+ * opponent banked identical totals and two equal-competence AIs always tied, which meant
+ * Tug of War's bonus hit never fired anywhere in the balance harness.
+ */
 function planMash(clash, player, competence, rngState) {
   const windowMs = 100;
   const windows = Math.floor((clash.endsAt - clash.startedAt) / windowMs);
   const rate = tapRateFor(competence);
-  const ceiling = Math.floor((windowMs / 1000) * MAX_TAPS_PER_SECOND);
   const inputs = [];
   let state = rngState;
+  let owed = 0;
 
   for (let i = 0; i < windows; i++) {
     const jitter = nextRandom(state);
     state = jitter.state;
-    const taps = Math.max(0, Math.round(((rate * windowMs) / 1000) * (0.8 + jitter.value * 0.4)));
-    if (taps === 0) continue;
+    owed += ((rate * windowMs) / 1000) * (0.8 + jitter.value * 0.4);
+    const taps = Math.floor(owed);
+    if (taps <= 0) continue;
+    owed -= taps;
     inputs.push({
       player,
-      payload: { taps: Math.min(taps, ceiling), windowMs, seq: i },
-      atMs: clash.startedAt + i * windowMs,
+      payload: { taps, seq: i },
+      atMs: clash.startedAt + (i + 1) * windowMs,
     });
   }
   return { value: inputs, state };
@@ -52,7 +62,7 @@ function planTimedPress(clash, player, competence, rngState, targetMs, spreadMs)
   const offset = error.value * (1 - clamp01(competence));
   const pressAtMs = Math.max(0, Math.min(clash.endsAt - clash.startedAt, targetMs + offset));
   return {
-    value: [{ player, payload: { pressAtMs }, atMs: clash.startedAt + pressAtMs }],
+    value: [{ player, payload: {}, atMs: clash.startedAt + pressAtMs }],
     state: error.state,
   };
 }

@@ -39,10 +39,11 @@ export const targetingLock = Object.freeze({
     return ms < 0 ? ms + eventState.periodMs : ms;
   },
 
+  /** Stop time is the validated arrival time, not a client-supplied one. See reflexStrike. */
   reduce(eventState, input) {
     if (input.player !== 'a' && input.player !== 'b') return eventState;
     if (eventState.presses[input.player] !== null) return eventState;
-    const pressAtMs = Number(input.payload?.pressAtMs);
+    const pressAtMs = Number(input.atMs);
     if (!Number.isFinite(pressAtMs)) return eventState;
     return { ...eventState, presses: { ...eventState.presses, [input.player]: pressAtMs } };
   },

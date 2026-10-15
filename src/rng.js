@@ -7,8 +7,17 @@
  * cryptographic and must never be used for anything security-bearing.
  */
 
-/** FNV-1a. Turns a battle id into a starting state. @param {string} str @returns {number} */
-export function hashSeed(str) {
+/**
+ * FNV-1a. Turns a battle id into a starting state.
+ *
+ * Anything that is not already a string is coerced: a caller passing a numeric battle id
+ * must not silently collapse every battle onto the same stream, which is what happened
+ * when this read `str.length` off a number.
+ * @param {unknown} seed
+ * @returns {number}
+ */
+export function hashSeed(seed) {
+  const str = typeof seed === 'string' ? seed : String(seed);
   let h = 2166136261 >>> 0;
   for (let i = 0; i < str.length; i++) {
     h ^= str.charCodeAt(i);

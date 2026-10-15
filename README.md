@@ -19,7 +19,17 @@ Implements step 1 of `docs/superpowers/specs/2026-10-15-cyber-authority-pvp-aren
 
 Player input during a clash event:
 
-    step(state, { type: 'clashInput', player: 'a', payload: { taps: 4, windowMs: 100, seq: 7 }, atMs: 12_340 });
+    step(state, { type: 'clashInput', player: 'a', payload: { taps: 4, seq: 7 }, atMs: 12_340 });
+
+**Caller contract — the two fields the engine cannot check for you:**
+
+- `player` is trusted absolutely. Set it from the authenticated socket, never from the
+  client's message. A client that can name itself could bind its opponent's Read stance
+  before they choose, or send one tap message as them with a huge `seq` and lock them out
+  of the rest of the event.
+- `atMs` must be the server's receive time. Everything time-based is scored from it — the
+  tap budget, the reflex press, the targeting stop — so a client-supplied value would hand
+  the client a perfect score. Nothing in the payload is trusted for timing.
 
 ## Rules
 
@@ -32,28 +42,28 @@ Player input during a clash event:
 
 ## Tests
 
-    npm test          # node --test, colocated *.test.js — 173 tests
+    npm test          # node --test, colocated *.test.js — 191 tests
     npm run balance   # pairwise simulation over the roster
 
 ## Measured balance (2026-10-15, `npm run balance -- --seeds 60`, 4,680 battles)
 
 | Power gap | Battles | Stronger robot wins | Mean length | Mean CI gap |
 |---|---|---|---|---|
-| even (<1.15x) | 240 | 44.6% | 74.9s | 1.06x |
-| slight (<1.6x) | 360 | 82.8% | 70.1s | 1.13x |
-| clear (<3x) | 540 | 95.0% | 70.4s | 1.23x |
-| crushing | 3,540 | 100.0% | 21.7s | 7.97x |
+| even (<1.15x) | 240 | 45.8% | 73.5s | 1.06x |
+| slight (<1.6x) | 360 | 80.3% | 68.9s | 1.13x |
+| clear (<3x) | 540 | 96.3% | 69.2s | 1.23x |
+| crushing | 3,540 | 100.0% | 21.4s | 7.97x |
 
-Battles in the matchmade range (even + slight) average **72.0s**. The all-battles mean of
-33.8s is dragged down by the crushing bucket, which matchmaking would never create.
+Battles in the matchmade range (even + slight) average **71s**. The all-battles mean of
+~34s is dragged down by the crushing bucket, which matchmaking would never create.
 
 Skill sweep on an exactly even pair, A's competence against B at 0.5:
 
 | Competence | 0 | 0.25 | 0.5 | 0.75 | 1 |
 |---|---|---|---|---|---|
-| A wins | 27.2% | 28.5% | 44.0% | 51.8% | 61.5% |
+| A wins | 31.8% | 34.0% | 45.3% | 56.8% | 71.7% |
 
-Monotonic, with a 34-point spread: between evenly matched robots, how well you play
+Monotonic, with a 40-point spread: between evenly matched robots, how well you play
 decides the fight — which is the whole point of the interactive layer. A separate check
 at n=2000 puts true mirror matches at **50.3%** (95% CI 48.1–52.5), so the engine itself
 has no side bias.
@@ -72,3 +82,13 @@ raw CI would produce fights that look fair on paper and are lopsided in practice
 
 CI remains correct as the whitepaper's public progression metric — it just is not a
 measure of who beats whom.
+
+## Known skew: the Read is not a balanced triangle
+
+Measured expected net damage per Read against an opponent picking uniformly:
+**overload +0.47, strike +0.03, guard -0.50**. Overload is the strongest pick, so a
+player who always picks it gains a real edge. The multipliers are spec section 3.7's
+verbatim, so this is inherited rather than introduced, and reads are deliberately
+outside the +/-20% skill cap - but it is a live balance question for the spec owner,
+not a settled design. `src/ai.test.js` pins the payoff numbers so a change to the
+table is noticed.

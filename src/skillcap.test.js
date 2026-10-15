@@ -90,3 +90,51 @@ test('equal play leaves the outcome to stats and seed alone', () => {
   assert.equal(state.fighters[0].momentum, 1);
   assert.equal(state.fighters[1].momentum, 1);
 });
+
+// Finding 9: the rigged registry above only exercises momentum. This runs the REAL event
+// set so the cap is measured against what actually ships. The Read is excluded because
+// spec section 3.7 deliberately exempts stance reads from the cap.
+test('with the real event set, skill influence stays inside the cap', async () => {
+  const { CLASH_EVENTS, CLASH_WEIGHTS } = await import('./events/index.js');
+
+  const events = {};
+  const weights = {};
+  for (const [id, event] of Object.entries(CLASH_EVENTS)) {
+    if (id === 'read') continue;
+    // Keep every real side effect (bonus hits, buffs); force only the score.
+    events[id] = Object.freeze({
+      ...event,
+      score: (eventState) => ({ ...event.score(eventState), a: 1, b: 0 }),
+    });
+    weights[id] = CLASH_WEIGHTS[id] ?? 1;
+  }
+
+  let perfect = 0;
+  let hopeless = 0;
+  for (let i = 0; i < 60; i++) {
+    let state = createBattle({
+      seed: `real-cap-${i}`,
+      a: fighter(),
+      b: fighter({ asset_id: '2' }),
+      clashRegistry: { events, weights },
+    });
+    let now = 0;
+    for (let n = 0; n < 20_000 && state.phase !== 'ended'; n++) {
+      now += MAX_TICK_STEP_MS;
+      const result = step(state, { type: 'tick', toMs: now });
+      state = result.state;
+      for (const event of result.events) {
+        if (event.type !== 'damage' || event.amount <= 0) continue;
+        if (event.fighter === 1) perfect += event.amount;
+        else hopeless += event.amount;
+      }
+    }
+  }
+
+  const ratio = perfect / hopeless;
+  const ceiling = (1 + SKILL_INFLUENCE_CAP) / (1 - SKILL_INFLUENCE_CAP);
+  assert.ok(
+    ratio <= ceiling,
+    `perfect play dealt ${ratio.toFixed(3)}x the damage of hopeless play, over the ${ceiling}x cap`,
+  );
+});

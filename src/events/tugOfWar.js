@@ -22,7 +22,7 @@ export const tugOfWar = Object.freeze({
 
   reduce(eventState, input) {
     if (input.player !== 'a' && input.player !== 'b') return eventState;
-    return { ...eventState, [input.player]: acceptTaps(eventState[input.player], input.payload) };
+    return { ...eventState, [input.player]: acceptTaps(eventState[input.player], input.payload, input.atMs) };
   },
 
   score(eventState) {

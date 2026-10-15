@@ -23,10 +23,15 @@ export const reflexStrike = Object.freeze({
     };
   },
 
+  /**
+   * The press moment is the input's arrival time, which the reducer has already validated
+   * against the open window — never a timestamp from the payload. A client that names its
+   * own press time can claim a perfect press the instant the window opens.
+   */
   reduce(eventState, input) {
     if (input.player !== 'a' && input.player !== 'b') return eventState;
     if (eventState.presses[input.player] !== null) return eventState;
-    const pressAtMs = Number(input.payload?.pressAtMs);
+    const pressAtMs = Number(input.atMs);
     if (!Number.isFinite(pressAtMs)) return eventState;
     return { ...eventState, presses: { ...eventState.presses, [input.player]: pressAtMs } };
   },

@@ -6,7 +6,8 @@
  *
  * The caller owns the clock. `step` never reads the time, never rolls a number that is not
  * drawn from the seeded generator in state, and never mutates its argument. The whole state
- * is JSON-serialisable so a Durable Object can store and restore it verbatim.
+ * is JSON-serialisable except `state.registry`, which holds the clash event modules;
+ * `rehydrate(state)` reattaches them after a Durable Object restores from storage.
  *
  * Phases: intro -> fighting -> ended. Task 10 inserts a 'clash' phase between actions.
  */
@@ -82,6 +83,28 @@ export function createBattle({ seed, a, b, clashRegistry }) {
 }
 
 /**
+ * Fails fast when a battle has been restored from storage without `rehydrate()`.
+ *
+ * JSON keeps the registry's shape — ids, durations, momentum shifts — and drops only the
+ * functions, so a restored registry looks populated and passes a truthiness check. Without
+ * this guard the battle runs normally for several seconds and then dies inside the first
+ * clash event with "event.init is not a function", far from the real mistake.
+ */
+function assertRegistryUsable(state) {
+  const events = state.registry?.events;
+  if (!events) {
+    throw new Error('battle state has no clash registry: call rehydrate(state) after restoring it');
+  }
+  for (const [id, event] of Object.entries(events)) {
+    if (typeof event?.init !== 'function' || typeof event?.reduce !== 'function' || typeof event?.score !== 'function') {
+      throw new Error(
+        `clash event "${id}" has no behaviour: this state was restored without rehydrate(state)`,
+      );
+    }
+  }
+}
+
+/**
  * Reattaches the non-serialisable registry after a Durable Object restores state from
  * storage. `state.registry` holds functions, so it does not survive JSON; everything else
  * does.
@@ -101,15 +124,28 @@ export function rehydrate(state, clashRegistry) {
 
 /**
  * @param {object} state
- * @param {{type: string, toMs?: number}} input
+ * @param {{type: string, toMs?: number, player?: 'a'|'b', payload?: object, atMs?: number}} input
  * @returns {{state: object, events: object[]}}
+ *
+ * CALLER CONTRACT — `input.player` is trusted absolutely.
+ *
+ * The engine has no notion of connections or identity, so whoever drives it MUST set
+ * `player` from the authenticated socket and never from the client's message. A client
+ * able to name itself could bind its opponent's Read stance before they chose, or send
+ * one tap message as them with a huge `seq` and lock them out of the rest of the event.
  */
 export function step(state, input) {
   if (!input) return { state, events: [] };
   if (state.phase === 'ended') return { state, events: [] };
+  assertRegistryUsable(state);
 
   if (input.type === 'clashInput') return applyClashInput(state, input);
   if (input.type !== 'tick') return { state, events: [] };
+
+  // A non-finite tick is rejected outright. Letting one through poisons the clock with
+  // NaN, and because every later comparison against NaN is false the battle can then
+  // never advance, never time out and never be resolved — with MUT staked on it.
+  if (!Number.isFinite(input.toMs)) return { state, events: [] };
 
   // Review Focus 5: a backwards tick (clock skew) changes nothing, and a very large jump
   // (a Durable Object waking from hibernation) advances by one bounded slice only, so a
@@ -139,10 +175,19 @@ function applyClashInput(state, input) {
   const event = state.registry.events[clash.id];
   if (!event) return { state, events: [] };
 
+  // Events are handed time RELATIVE to the window opening, derived from the arrival time
+  // the guard above validated — never a timestamp the client chose. A client that could
+  // name its own press moment could claim a perfect press the instant the window opened.
+  const elapsedMs = atMs - clash.startedAt;
+
   const next = cloneState(state);
   next.clash = {
     ...clash,
-    eventState: event.reduce(clash.eventState, { player: input.player, payload: input.payload, atMs }),
+    eventState: event.reduce(clash.eventState, {
+      player: input.player,
+      payload: input.payload,
+      atMs: elapsedMs,
+    }),
   };
   return { state: next, events: [] };
 }
@@ -294,7 +339,10 @@ function resolveClash(state, events) {
 }
 
 function applyBuff(state, index, buff, events) {
-  if (!buff) return;
+  // An event that hands this player nothing must leave an earlier, unspent buff alone.
+  // Power Routing always returns a buffs object, with {} for a player who allocated
+  // nothing, so `!buff` alone would let a later event silently delete a live reward.
+  if (!buff || Object.keys(buff).length === 0) return;
   const fighter = state.fighters[index];
   if (buff.surge) {
     fighter.surge += buff.surge;
@@ -423,11 +471,16 @@ function resolveAction(state, index, events) {
 
   const actionMult = isHeavy ? ACTION_MULT.overload : isSurge ? ACTION_MULT.surge : ACTION_MULT.strike;
 
+  // Every surge change is announced: the client is a renderer and rebuilds its meter
+  // from the event stream alone, so a silent change desynchronises it for the rest of
+  // the battle.
   if (isSurge) {
     attacker.surge = Math.max(0, attacker.surge - SURGE_CHARGES_REQUIRED);
+    events.push({ t: state.clockMs, type: 'surge', fighter: index, charges: attacker.surge });
   }
   if (isHeavy) {
     defender.surge += 1;
+    events.push({ t: state.clockMs, type: 'surge', fighter: 1 - index, charges: defender.surge });
   }
 
   const buff = attacker.pendingBuff ?? {};

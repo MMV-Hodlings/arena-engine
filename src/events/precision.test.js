@@ -8,7 +8,7 @@ import { hashSeed } from '../rng.js';
 
 test('reflex strike: hitting the sweet spot exactly scores one', () => {
   const state = reflexStrike.init(hashSeed('reflex'), {}).value;
-  const pressed = reflexStrike.reduce(state, { player: 'a', payload: { pressAtMs: state.sweetSpotMs }, atMs: 0 });
+  const pressed = reflexStrike.reduce(state, { player: 'a', payload: {}, atMs: state.sweetSpotMs });
   assert.equal(reflexStrike.score(pressed).a, 1);
 });
 
@@ -19,16 +19,16 @@ test('reflex strike: not pressing scores zero', () => {
 
 test('reflex strike: the score falls off with distance and bottoms out at zero', () => {
   const state = reflexStrike.init(hashSeed('falloff'), {}).value;
-  const near = reflexStrike.reduce(state, { player: 'a', payload: { pressAtMs: state.sweetSpotMs + state.toleranceMs / 2 }, atMs: 0 });
-  const far = reflexStrike.reduce(state, { player: 'a', payload: { pressAtMs: state.sweetSpotMs + state.toleranceMs * 5 }, atMs: 0 });
+  const near = reflexStrike.reduce(state, { player: 'a', payload: {}, atMs: state.sweetSpotMs + state.toleranceMs / 2 });
+  const far = reflexStrike.reduce(state, { player: 'a', payload: {}, atMs: state.sweetSpotMs + state.toleranceMs * 5 });
   assert.ok(Math.abs(reflexStrike.score(near).a - 0.5) < 1e-9);
   assert.equal(reflexStrike.score(far).a, 0);
 });
 
 test('reflex strike: only the first press counts', () => {
   const state = reflexStrike.init(hashSeed('first'), {}).value;
-  let pressed = reflexStrike.reduce(state, { player: 'a', payload: { pressAtMs: state.sweetSpotMs * 10 }, atMs: 0 });
-  pressed = reflexStrike.reduce(pressed, { player: 'a', payload: { pressAtMs: state.sweetSpotMs }, atMs: 0 });
+  let pressed = reflexStrike.reduce(state, { player: 'a', payload: {}, atMs: state.sweetSpotMs * 10 });
+  pressed = reflexStrike.reduce(pressed, { player: 'a', payload: {}, atMs: state.sweetSpotMs });
   assert.ok(reflexStrike.score(pressed).a < 1);
 });
 
@@ -45,7 +45,7 @@ test('reflex strike: the sweet spot varies with the seed but stays inside the wi
 test('targeting lock: stopping on the weak point scores one', () => {
   const state = targetingLock.init(hashSeed('target'), {}).value;
   const perfectMs = targetingLock.timeAtPosition(state, state.weakPoint);
-  const stopped = targetingLock.reduce(state, { player: 'a', payload: { pressAtMs: perfectMs }, atMs: 0 });
+  const stopped = targetingLock.reduce(state, { player: 'a', payload: {}, atMs: perfectMs });
   assert.ok(targetingLock.score(stopped).a > 0.99);
 });
 
