@@ -1,0 +1,197 @@
+[
+  {
+    "asset_id": "1099992035091",
+    "name": "Onerion",
+    "clan": "Onerion",
+    "core_power": 94,
+    "immutable_data": {
+      "cp": "94",
+      "element": "Neutral",
+      "attack star": "1",
+      "defense star": "1",
+      "hp star": "1",
+      "pvp ready": "1",
+      "modules equipped": "5"
+    }
+  },
+  {
+    "asset_id": "1099992035090",
+    "name": "Zeronex",
+    "clan": "Zeronex",
+    "core_power": 94,
+    "immutable_data": {
+      "cp": "94",
+      "element": "Neutral",
+      "attack star": "1",
+      "defense star": "1",
+      "hp star": "1",
+      "pvp ready": "1",
+      "modules equipped": "5"
+    }
+  },
+  {
+    "asset_id": "1099986549136",
+    "name": "Onerion",
+    "clan": "Onerion",
+    "core_power": 296,
+    "immutable_data": {
+      "cp": "296",
+      "element": "Neutral",
+      "attack star": "3",
+      "defense star": "3",
+      "hp star": "3",
+      "pvp ready": "1",
+      "modules equipped": "5"
+    }
+  },
+  {
+    "asset_id": "1099986553745",
+    "name": "Zeronex",
+    "clan": "Zeronex",
+    "core_power": 296,
+    "immutable_data": {
+      "cp": "296",
+      "element": "Neutral",
+      "attack star": "3",
+      "defense star": "3",
+      "hp star": "3",
+      "pvp ready": "1",
+      "modules equipped": "5"
+    }
+  },
+  {
+    "asset_id": "1099986548844",
+    "name": "Zeronex",
+    "clan": "Zeronex",
+    "core_power": 103,
+    "immutable_data": {
+      "cp": "103",
+      "element": "Earth",
+      "attack star": "2",
+      "defense star": "1",
+      "hp star": "1",
+      "pvp ready": "1",
+      "modules equipped": "5"
+    }
+  },
+  {
+    "asset_id": "1099986964909",
+    "name": "Onerion",
+    "clan": "Onerion",
+    "core_power": 277,
+    "immutable_data": {
+      "cp": "277",
+      "element": "Fire",
+      "attack star": "2",
+      "defense star": "2",
+      "hp star": "2",
+      "pvp ready": "1",
+      "modules equipped": "5"
+    }
+  },
+  {
+    "asset_id": "1099992035093",
+    "name": "Zeronex",
+    "clan": "Zeronex",
+    "core_power": 285,
+    "immutable_data": {
+      "cp": "285",
+      "element": "Ice",
+      "attack star": "2",
+      "defense star": "3",
+      "hp star": "3",
+      "pvp ready": "1",
+      "modules equipped": "5"
+    }
+  },
+  {
+    "asset_id": "1099992035102",
+    "name": "Onerion",
+    "clan": "Onerion",
+    "core_power": 296,
+    "immutable_data": {
+      "cp": "296",
+      "element": "Ice",
+      "attack star": "3",
+      "defense star": "2",
+      "hp star": "3",
+      "pvp ready": "1",
+      "modules equipped": "5"
+    }
+  },
+  {
+    "asset_id": "1099992035099",
+    "name": "Zeronex",
+    "clan": "Zeronex",
+    "core_power": 296,
+    "immutable_data": {
+      "cp": "296",
+      "element": "Lightning",
+      "attack star": "3",
+      "defense star": "3",
+      "hp star": "2",
+      "pvp ready": "1",
+      "modules equipped": "5"
+    }
+  },
+  {
+    "asset_id": "1099992035100",
+    "name": "Onerion",
+    "clan": "Onerion",
+    "core_power": 564,
+    "immutable_data": {
+      "cp": "564",
+      "element": "Air",
+      "attack star": "3",
+      "defense star": "3",
+      "hp star": "4",
+      "pvp ready": "1",
+      "modules equipped": "5"
+    }
+  },
+  {
+    "asset_id": "1099986552238",
+    "name": "Zeronex",
+    "clan": "Zeronex",
+    "core_power": 578,
+    "immutable_data": {
+      "cp": "578",
+      "element": "Water",
+      "attack star": "4",
+      "defense star": "3",
+      "hp star": "4",
+      "pvp ready": "1",
+      "modules equipped": "5"
+    }
+  },
+  {
+    "asset_id": "1099986548238",
+    "name": "Onerion",
+    "clan": "Onerion",
+    "core_power": 580,
+    "immutable_data": {
+      "cp": "580",
+      "element": "Ice",
+      "attack star": "4",
+      "defense star": "4",
+      "hp star": "4",
+      "pvp ready": "1",
+      "modules equipped": "5"
+    }
+  },
+  {
+    "asset_id": "1099986552104",
+    "name": "Zeronex",
+    "clan": "Zeronex",
+    "core_power": 582,
+    "immutable_data": {
+      "cp": "582",
+      "element": "Air",
+      "attack star": "5",
+      "defense star": "4",
+      "hp star": "5",
+      "pvp ready": "1",
+      "modules equipped": "5"
+    }
+  }
+]
