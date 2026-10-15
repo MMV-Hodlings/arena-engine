@@ -92,3 +92,33 @@ test('a missing set name never leaks undefined into the prose', () => {
     assert.ok(!line.text.includes('null'), line.text);
   }
 });
+
+test('a set name that just repeats the robot name is dropped', () => {
+  // A full-sync robot is named after its set, so "Dominus finds the gap in Dominus AI's
+  // Dominus plating" is what naive interpolation produces. The part keeps its noun and
+  // loses the redundant adjective.
+  const sameName = [
+    { name: 'Dominus', clan: 'Onerion', element: 'Ice', sets: { weapon: 'Dominus', torso: 'Dominus', legs: 'Dominus', helmet: 'Dominus', back: 'Dominus' } },
+    { name: 'Dominus AI', clan: 'Onerion', element: 'Ice', sets: { weapon: 'Dominus', torso: 'Dominus', legs: 'Dominus', helmet: 'Dominus', back: 'Dominus' } },
+  ];
+  for (let t = 0; t < 40; t++) {
+    const line = narrate({ t: t * 1000, type: 'action', fighter: 0, action: 'strike' }, sameName);
+    const hits = line.text.split('Dominus').length - 1;
+    assert.ok(hits <= 2, `"${line.text}" says the name ${hits} times`);
+  }
+});
+
+test('a distinctive set name is still used', () => {
+  const mixed = [
+    { name: 'Shogun', clan: 'Onerion', element: 'Fire', sets: { weapon: 'Astra', torso: 'Nova', legs: 'Flux', helmet: 'Pulse', back: 'Vortex' } },
+    { name: 'Apex AI', clan: 'Zeronex', element: 'Ice', sets: { weapon: 'Codex', torso: 'Apex', legs: 'Flux', helmet: 'Vortex', back: 'Nexus' } },
+  ];
+  const texts = [];
+  for (let t = 0; t < 40; t++) {
+    texts.push(narrate({ t: t * 1000, type: 'action', fighter: 0, action: 'strike' }, mixed).text);
+  }
+  assert.ok(
+    texts.some((text) => /Astra|Nova|Flux|Pulse/.test(text)),
+    'set names vanished even when they were distinctive',
+  );
+});

@@ -13,10 +13,19 @@ function pick(list, key) {
   return list[hashSeed(key) % list.length];
 }
 
-/** A set name if the robot has one, otherwise a plain fallback. Never prints undefined. */
+/**
+ * A set name if the robot has one, otherwise a plain fallback. Never prints undefined.
+ *
+ * A fully synced robot is named after its own set, so naive interpolation produces
+ * "Dominus finds the gap in Dominus AI's Dominus plating". When the adjective only
+ * repeats the robot's name it is dropped; a distinctive set still earns its mention.
+ */
 function part(fighter, slot, fallback) {
   const name = fighter?.sets?.[slot];
-  return name ? `${name} ${fallback}` : fallback;
+  if (!name) return fallback;
+  const own = String(fighter?.name ?? '');
+  if (own === name || own.startsWith(`${name} `)) return fallback;
+  return `${name} ${fallback}`;
 }
 
 const STRIKE = [
