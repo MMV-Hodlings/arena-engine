@@ -194,3 +194,26 @@ test('a defensive buff is spent on the first hit it absorbs', () => {
   );
   assert.equal(later.fighters[1].pendingBuff, null);
 });
+
+test('a clash announces what the client may draw', () => {
+  const event = scripted({ a: 0.5, b: 0.5 }, {
+    publicState: (eventState) => ({ drawable: true, taps: eventState.inputs.length }),
+  });
+  const { events } = advanceUntil(battleWith(event), (s) => s.phase === 'clash');
+  const start = events.find((frame) => frame.type === 'clashStart');
+  assert.ok(start.public, 'clashStart carried no public state');
+  assert.equal(start.public.drawable, true);
+});
+
+test('an event with no publicState still starts cleanly', () => {
+  const bare = Object.freeze({
+    id: 'bare',
+    durationMs: 1000,
+    momentumShift: MOMENTUM_SHIFT,
+    init: (rngState) => ({ value: {}, state: rngState }),
+    reduce: (eventState) => eventState,
+    score: () => ({ a: 0.5, b: 0.5 }),
+  });
+  const { events } = advanceUntil(battleWith(bare), (s) => s.phase === 'clash');
+  assert.deepEqual(events.find((frame) => frame.type === 'clashStart').public, {});
+});

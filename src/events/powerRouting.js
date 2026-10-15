@@ -40,6 +40,17 @@ export const powerRouting = Object.freeze({
     return { ...eventState, allocations: { ...eventState.allocations, [input.player]: pips } };
   },
 
+  /** The pip budget, and whether each side has committed its allocation. */
+  publicState(eventState) {
+    return {
+      pips: PIPS,
+      allocated: {
+        a: eventState.allocations.a !== null,
+        b: eventState.allocations.b !== null,
+      },
+    };
+  },
+
   score(eventState) {
     const buffFor = (pips) => {
       if (!pips) return {};

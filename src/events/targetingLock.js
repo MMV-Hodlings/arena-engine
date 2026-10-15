@@ -48,6 +48,19 @@ export const targetingLock = Object.freeze({
     return { ...eventState, presses: { ...eventState.presses, [input.player]: pressAtMs } };
   },
 
+  /** Everything needed to draw the drifting crosshair and the weak point it hunts. */
+  publicState(eventState) {
+    return {
+      phase: eventState.phase,
+      periodMs: eventState.periodMs,
+      weakPoint: eventState.weakPoint,
+      pressed: {
+        a: eventState.presses.a !== null,
+        b: eventState.presses.b !== null,
+      },
+    };
+  },
+
   score(eventState) {
     const scoreFor = (press) => {
       if (press === null) return 0;

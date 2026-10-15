@@ -36,6 +36,22 @@ export const reflexStrike = Object.freeze({
     return { ...eventState, presses: { ...eventState.presses, [input.player]: pressAtMs } };
   },
 
+  /**
+   * The sweet spot is published on purpose: a ring you cannot read is a coin flip, not a
+   * skill check. Knowing where it is costs nothing, because the score comes from the
+   * server-validated arrival time, which no client controls.
+   */
+  publicState(eventState) {
+    return {
+      sweetSpotMs: eventState.sweetSpotMs,
+      toleranceMs: eventState.toleranceMs,
+      pressed: {
+        a: eventState.presses.a !== null,
+        b: eventState.presses.b !== null,
+      },
+    };
+  },
+
   score(eventState) {
     const scoreFor = (press) => {
       if (press === null) return 0;

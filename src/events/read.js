@@ -29,6 +29,23 @@ export const read = Object.freeze({
     return { ...eventState, picks: { ...eventState.picks, [input.player]: stance } };
   },
 
+  /**
+   * Who is winding up, and whether each side has locked a stance in — never WHICH stance.
+   * A client that could see the opponent's pick before the window closed would counter it
+   * every time, and the Read is the one place in the design where a read beats a wallet.
+   */
+  publicState(eventState) {
+    // The three stances are fixed and the client already knows them; publishing the list
+    // here would only make a leak check unable to tell the menu from a commitment.
+    return {
+      heavyBy: eventState.heavyBy,
+      committed: {
+        a: eventState.picks.a !== null,
+        b: eventState.picks.b !== null,
+      },
+    };
+  },
+
   score(eventState) {
     const a = eventState.picks.a ?? DEFAULT_STANCE;
     const b = eventState.picks.b ?? DEFAULT_STANCE;

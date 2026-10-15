@@ -42,6 +42,17 @@ export const sequenceLock = Object.freeze({
     };
   },
 
+  /** The sequence itself; repeating it quickly and correctly is the skill. */
+  publicState(eventState) {
+    return {
+      sequence: [...eventState.sequence],
+      entered: {
+        a: eventState.entries.a !== null,
+        b: eventState.entries.b !== null,
+      },
+    };
+  },
+
   score(eventState) {
     const scoreFor = (entry) => {
       if (!entry) return 0;

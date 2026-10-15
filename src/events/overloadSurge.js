@@ -24,6 +24,12 @@ export const overloadSurge = Object.freeze({
     return { ...eventState, [input.player]: acceptTaps(eventState[input.player], input.payload, input.atMs) };
   },
 
+  /** How full each gauge is, which is what the client draws. */
+  publicState(eventState) {
+    const fill = (side) => Math.min(1, side.taps / TARGET_TAPS);
+    return { target: TARGET_TAPS, fill: { a: fill(eventState.a), b: fill(eventState.b) } };
+  },
+
   score(eventState) {
     const fill = (side) => Math.min(1, side.taps / TARGET_TAPS);
     return { a: fill(eventState.a), b: fill(eventState.b) };

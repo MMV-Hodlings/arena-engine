@@ -273,6 +273,9 @@ function startClash(state, id, ctx, events) {
     id,
     endsAt: state.clash.endsAt,
     durationMs: event.durationMs,
+    // What the client may draw. Without this the timing events are unplayable: a player
+    // cannot aim at a sweet spot they were never shown.
+    public: event.publicState ? event.publicState(state.clash.eventState) : {},
   });
 }
 

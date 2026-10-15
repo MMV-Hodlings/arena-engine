@@ -25,6 +25,12 @@ export const tugOfWar = Object.freeze({
     return { ...eventState, [input.player]: acceptTaps(eventState[input.player], input.payload, input.atMs) };
   },
 
+  /** Where the bar sits, on 0..1 from b's end to a's. Tap counts stay private. */
+  publicState(eventState) {
+    const position = Math.max(-1, Math.min(1, (eventState.a.taps - eventState.b.taps) * STEP));
+    return { position: (position + 1) / 2 };
+  },
+
   score(eventState) {
     const position = Math.max(-1, Math.min(1, (eventState.a.taps - eventState.b.taps) * STEP));
     const a = (position + 1) / 2;
