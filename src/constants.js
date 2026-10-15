@@ -1,0 +1,56 @@
+/**
+ * Every tunable in the simulation. No other file may contain a magic number.
+ * Values marked (spec) are fixed by docs/superpowers/specs/2026-10-15-cyber-authority-pvp-arena-design.md
+ * and must not be changed without changing the spec.
+ */
+
+/** Bump whenever a change alters simulation output; stamped on every battle record. */
+export const ENGINE_VERSION = '1.0.0';
+
+/** (spec) Damage pacing constant. ~10 landed hits settle a mirror match at any tier. */
+export const K = 0.2;
+
+/** (spec) 604.8 max CP x 5 stars x 3 ratings. Denominator of the Combat Index. */
+export const MAX_TOTAL_CS = 9072;
+
+/** (spec) Momentum is the only skill channel and is clamped to this range. */
+export const MOMENTUM_MIN = 0.8;
+export const MOMENTUM_MAX = 1.2;
+export const MOMENTUM_START = 1.0;
+
+/** (spec) Momentum shift per clash event, and the smaller shift the Read event applies. */
+export const MOMENTUM_SHIFT = 0.1;
+export const MOMENTUM_SHIFT_READ = 0.05;
+
+/** (spec) Total damage swing achievable through skill. Enforced by a property test. */
+export const SKILL_INFLUENCE_CAP = 0.2;
+
+/** (spec) Action gauge cadence and its jitter, in milliseconds. */
+export const ACTION_CADENCE_MS = 4000;
+export const ACTION_JITTER = 0.15;
+
+/** (spec) Chance a clash event fires on an action resolution. ~5 per battle over ~20 actions. */
+export const CLASH_CHANCE = 0.2;
+
+/** (spec) From 90s, all damage multiplies by 1.2 every further 15s, compounding. */
+export const SUDDEN_DEATH_START_MS = 90_000;
+export const SUDDEN_DEATH_STEP_MS = 15_000;
+export const SUDDEN_DEATH_FACTOR = 1.2;
+
+/** (spec) Element Surge needs this many charges. */
+export const SURGE_CHARGES_REQUIRED = 3;
+
+/** Damage variance, applied per landed hit. */
+export const VARIANCE = 0.05;
+
+/** (spec) Server-side clamp on mashing. Defeats autoclickers; a fast human reaches ~10. */
+export const MAX_TAPS_PER_SECOND = 12;
+
+/** Below this fraction of max HP a robot is "reeling": forces a clash event, shifts action weights. */
+export const LOW_HP_FRACTION = 0.25;
+
+/** The largest slice of time one tick may advance. Guards against hibernation wake-ups. */
+export const MAX_TICK_STEP_MS = 250;
+
+/** Hard ceiling on battle length, after which the engine declares a result regardless. */
+export const MAX_BATTLE_MS = 600_000;
