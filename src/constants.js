@@ -54,3 +54,9 @@ export const MAX_TICK_STEP_MS = 250;
 
 /** Hard ceiling on battle length, after which the engine declares a result regardless. */
 export const MAX_BATTLE_MS = 600_000;
+
+/** Intro beat before the fighting starts: banners, VS flash, sprite entrances. */
+export const INTRO_MS = 3000;
+
+/** A hit at or above this fraction of max HP grants the victim a surge charge. */
+export const BIG_HIT_FRACTION = 0.15;
