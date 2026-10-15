@@ -45,10 +45,6 @@ export const reflexStrike = Object.freeze({
     return {
       sweetSpotMs: eventState.sweetSpotMs,
       toleranceMs: eventState.toleranceMs,
-      pressed: {
-        a: eventState.presses.a !== null,
-        b: eventState.presses.b !== null,
-      },
     };
   },
 

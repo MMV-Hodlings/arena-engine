@@ -54,10 +54,6 @@ export const targetingLock = Object.freeze({
       phase: eventState.phase,
       periodMs: eventState.periodMs,
       weakPoint: eventState.weakPoint,
-      pressed: {
-        a: eventState.presses.a !== null,
-        b: eventState.presses.b !== null,
-      },
     };
   },
 

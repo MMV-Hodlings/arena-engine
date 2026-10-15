@@ -80,23 +80,23 @@ test('no event publishes an opponent commitment before the window closes', () =>
   );
 });
 
-test('the read still tells each side whether it has committed', () => {
-  const read = CLASH_EVENTS.read;
-  let state = read.init(hashSeed('read2'), { heavyBy: 1 }).value;
-  assert.deepEqual(read.publicState(state).committed, { a: false, b: false });
-  state = read.reduce(state, { player: 'a', payload: { stance: 'guard' }, atMs: 50 });
-  assert.deepEqual(read.publicState(state).committed, { a: true, b: false });
-  assert.equal(read.publicState(state).heavyBy, 1);
-});
-
+// An earlier test here asserted that the Read published each side's committed flag. That
+// was the exploit, written down as a requirement — removed rather than relaxed.
 test('published state carries no raw per-seat internals', () => {
+  // Checked after input, not on fresh state, and at any depth — the shallow version of
+  // this test let overloadSurge's nested fill:{a,b} sail straight past it.
+  const sawTapCounts = (value) =>
+    JSON.stringify(value ?? {}).includes('"taps"') || JSON.stringify(value ?? {}).includes('"lastSeq"');
+
   for (const [id, event] of Object.entries(CLASH_EVENTS)) {
-    const state = event.init(hashSeed(id), { heavyBy: 0 }).value;
+    let state = event.init(hashSeed(id), { heavyBy: 0 }).value;
+    state = event.reduce(state, { player: 'a', payload: { taps: 3, seq: 0, stance: 'guard' }, atMs: 100 });
     const published = event.publicState(state);
+    assert.equal(sawTapCounts(published), false, `${id} published raw tap bookkeeping`);
     assert.equal(
-      Object.hasOwn(published, 'a') && Object.hasOwn(published, 'b'),
+      Object.hasOwn(published, 'presses') || Object.hasOwn(published, 'picks') || Object.hasOwn(published, 'entries'),
       false,
-      `${id} published its internal per-seat state verbatim`,
+      `${id} published its internal structures verbatim`,
     );
   }
 });
@@ -107,5 +107,51 @@ test('publishing never mutates the event state', () => {
     const before = JSON.stringify(state);
     event.publicState(state);
     assert.equal(JSON.stringify(state), before, `${id} mutated its state while publishing`);
+  }
+});
+
+// A review found the real leak: publishing WHETHER each side has committed lets a client
+// poll at tick resolution, wait for the opponent to commit or time out, and always move
+// last. Stance reads sit outside SKILL_INFLUENCE_CAP, so that edge is unbounded — the one
+// place in the design where that is true.
+test('nothing about commitment is published while the window is open', () => {
+  const read = CLASH_EVENTS.read;
+  let state = read.init(hashSeed('leak'), { heavyBy: 0 }).value;
+
+  const empty = JSON.stringify(read.publicState(state));
+  state = read.reduce(state, { player: 'b', payload: { stance: 'overload' }, atMs: 100 });
+  const afterOpponentCommitted = JSON.stringify(read.publicState(state));
+
+  assert.equal(
+    afterOpponentCommitted,
+    empty,
+    'the published state changed when the opponent committed, so a client can wait them out',
+  );
+});
+
+test('the read still says who is winding up, which is what the client draws', () => {
+  const state = CLASH_EVENTS.read.init(hashSeed('telegraph'), { heavyBy: 1 }).value;
+  assert.equal(CLASH_EVENTS.read.publicState(state).heavyBy, 1);
+});
+
+test('no event reveals that an opponent has acted', () => {
+  // Every event: committing must not change what the other side can observe.
+  const commitments = {
+    read: { stance: 'guard' },
+    reflexStrike: {},
+    targetingLock: {},
+    sequenceLock: { keys: ['up', 'up', 'up', 'up', 'up'] },
+    powerRouting: { pips: { atk: 3, def: 0, surge: 0 } },
+  };
+  for (const [id, payload] of Object.entries(commitments)) {
+    const event = CLASH_EVENTS[id];
+    let state = event.init(hashSeed(`reveal-${id}`), { heavyBy: 0 }).value;
+    const before = JSON.stringify(event.publicState(state));
+    state = event.reduce(state, { player: 'b', payload, atMs: 200 });
+    assert.equal(
+      JSON.stringify(event.publicState(state)),
+      before,
+      `${id} told the other player that b had acted`,
+    );
   }
 });

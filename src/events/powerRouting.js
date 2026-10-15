@@ -44,10 +44,6 @@ export const powerRouting = Object.freeze({
   publicState(eventState) {
     return {
       pips: PIPS,
-      allocated: {
-        a: eventState.allocations.a !== null,
-        b: eventState.allocations.b !== null,
-      },
     };
   },
 

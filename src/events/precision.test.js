@@ -119,3 +119,25 @@ test('power routing: surge pips are granted as charges', () => {
   state = powerRouting.reduce(state, { player: 'b', payload: { pips: { atk: 0, def: 0, surge: 3 } }, atMs: 100 });
   assert.equal(powerRouting.score(state).buffs.b.surge, 3);
 });
+
+// A review showed the published sequence makes this event free for a script: it replays
+// the keys at atMs ~ 0 and scores a perfect 1.0 with no timing at all, beating a fast
+// human every time. Publishing the sequence is necessary (you cannot repeat what you were
+// never shown), so the speed term is floored at a human reaction instead.
+test('sequence lock: a script replaying instantly cannot beat a quick human', () => {
+  const state = sequenceLock.init(hashSeed('bot'), {}).value;
+  const bot = sequenceLock.reduce(state, { player: 'a', payload: { keys: state.sequence }, atMs: 0 });
+  const human = sequenceLock.reduce(state, { player: 'b', payload: { keys: state.sequence }, atMs: 900 });
+  assert.equal(
+    sequenceLock.score(bot).a,
+    sequenceLock.score(human).b,
+    'an instant replay out-scored a human playing well',
+  );
+});
+
+test('sequence lock: being slower than the floor still costs you', () => {
+  const state = sequenceLock.init(hashSeed('slow'), {}).value;
+  const quick = sequenceLock.reduce(state, { player: 'a', payload: { keys: state.sequence }, atMs: 900 });
+  const slow = sequenceLock.reduce(state, { player: 'b', payload: { keys: state.sequence }, atMs: 3500 });
+  assert.ok(sequenceLock.score(quick).a > sequenceLock.score(slow).b);
+});

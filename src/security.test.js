@@ -175,7 +175,18 @@ test('sequence lock speed is measured against the event window, not the battle c
   // thousands. If that is used raw against a 5000ms window, speed is always zero.
   const init = sequenceLock.init(hashSeed('seq-sec'), {});
   const quick = sequenceLock.reduce(init.value, { player: 'a', payload: { keys: init.value.sequence }, atMs: 200 });
-  assert.ok(sequenceLock.score(quick).a > 0.95, 'a fast, perfect entry should score near the top');
+  // 0.9 rather than 0.95: the speed term is floored at a human reaction so an instant
+  // script cannot beat a person, which caps even a perfect entry a little below 1.
+  assert.ok(sequenceLock.score(quick).a > 0.9, 'a fast, perfect entry should score near the top');
+
+  // The point of this test: a battle-clock timestamp must not be read as window time.
+  const asBattleClock = sequenceLock.reduce(init.value, {
+    player: 'b', payload: { keys: init.value.sequence }, atMs: 42_000,
+  });
+  assert.ok(
+    sequenceLock.score(quick).a > sequenceLock.score(asBattleClock).b,
+    'window-relative timing is not being used',
+  );
 });
 
 // ── Finding 7: seeds that are not strings ──────────────────────────────────────────

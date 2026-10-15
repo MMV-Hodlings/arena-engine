@@ -30,20 +30,16 @@ export const read = Object.freeze({
   },
 
   /**
-   * Who is winding up, and whether each side has locked a stance in — never WHICH stance.
-   * A client that could see the opponent's pick before the window closed would counter it
-   * every time, and the Read is the one place in the design where a read beats a wallet.
+   * Only who is winding up.
+   *
+   * An earlier version also published whether each side had committed, which is a free
+   * win: poll it at tick resolution, wait for the opponent to commit or run out of time,
+   * then move last with the counter. Stance reads sit outside SKILL_INFLUENCE_CAP, so
+   * unlike every other clash event that edge is unbounded. A client knows its own pick
+   * without being told, and must not learn anything about the other.
    */
   publicState(eventState) {
-    // The three stances are fixed and the client already knows them; publishing the list
-    // here would only make a leak check unable to tell the menu from a commitment.
-    return {
-      heavyBy: eventState.heavyBy,
-      committed: {
-        a: eventState.picks.a !== null,
-        b: eventState.picks.b !== null,
-      },
-    };
+    return { heavyBy: eventState.heavyBy };
   },
 
   score(eventState) {

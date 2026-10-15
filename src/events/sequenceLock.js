@@ -13,6 +13,15 @@ const LENGTH = 5;
 /** Share of the score that comes from accuracy; the rest comes from speed. */
 const ACCURACY_WEIGHT = 0.7;
 
+/**
+ * The fastest time that earns the full speed bonus.
+ *
+ * The sequence has to be published or there is nothing to repeat, which means a script can
+ * echo it back instantly. Flooring the speed term at a human reaction makes that worth
+ * exactly as much as playing well and no more.
+ */
+const HUMAN_FLOOR_MS = 900;
+
 export const sequenceLock = Object.freeze({
   id: 'sequenceLock',
   durationMs: DURATION_MS,
@@ -46,10 +55,6 @@ export const sequenceLock = Object.freeze({
   publicState(eventState) {
     return {
       sequence: [...eventState.sequence],
-      entered: {
-        a: eventState.entries.a !== null,
-        b: eventState.entries.b !== null,
-      },
     };
   },
 
@@ -63,7 +68,7 @@ export const sequenceLock = Object.freeze({
       }
       const accuracy = correct / eventState.sequence.length;
       if (accuracy === 0) return 0;
-      const speed = Math.max(0, 1 - entry.atMs / DURATION_MS);
+      const speed = Math.max(0, 1 - Math.max(entry.atMs, HUMAN_FLOOR_MS) / DURATION_MS);
       return accuracy * (ACCURACY_WEIGHT + (1 - ACCURACY_WEIGHT) * speed);
     };
     return { a: scoreFor(eventState.entries.a), b: scoreFor(eventState.entries.b) };
