@@ -7,3 +7,4 @@ export { planClashInputs, choosePosture } from './ai.js';
 export { CLASH_EVENTS, CLASH_WEIGHTS } from './events/index.js';
 export { normalizeElement, elementMultiplier, ELEMENTS, NEUTRAL } from './elements.js';
 export { ENGINE_VERSION } from './constants.js';
+export { hashSeed } from './rng.js';
