@@ -7,12 +7,20 @@ import { weightedPick } from '../rng.js';
 import { read } from './read.js';
 import { tugOfWar } from './tugOfWar.js';
 import { overloadSurge } from './overloadSurge.js';
+import { reflexStrike } from './reflexStrike.js';
+import { targetingLock } from './targetingLock.js';
+import { sequenceLock } from './sequenceLock.js';
+import { powerRouting } from './powerRouting.js';
 
 /** id -> event module. */
 export const CLASH_EVENTS = Object.freeze({
   [read.id]: read,
   [tugOfWar.id]: tugOfWar,
   [overloadSurge.id]: overloadSurge,
+  [reflexStrike.id]: reflexStrike,
+  [targetingLock.id]: targetingLock,
+  [sequenceLock.id]: sequenceLock,
+  [powerRouting.id]: powerRouting,
 });
 
 /**
@@ -22,6 +30,10 @@ export const CLASH_EVENTS = Object.freeze({
 export const CLASH_WEIGHTS = Object.freeze({
   [tugOfWar.id]: 2,
   [overloadSurge.id]: 2,
+  [reflexStrike.id]: 3,
+  [targetingLock.id]: 2,
+  [sequenceLock.id]: 2,
+  [powerRouting.id]: 1,
 });
 
 /**

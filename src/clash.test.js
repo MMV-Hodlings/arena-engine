@@ -181,3 +181,16 @@ test('clash events stay deterministic across identical runs', () => {
   };
   assert.deepEqual(run(), run());
 });
+
+test('a defensive buff is spent on the first hit it absorbs', () => {
+  const event = scripted({ a: 0.5, b: 0.5, buffs: { a: {}, b: { defMult: 1.45 } } });
+  const { state } = advanceUntil(battleWith(event), (s) => s.phase === 'clash');
+  const { state: after } = advanceUntil(state, (s) => s.phase !== 'clash');
+  assert.deepEqual(after.fighters[1].pendingBuff, { defMult: 1.45 });
+  const { state: later } = advanceUntil(
+    after,
+    (s) => s.fighters[1].pendingBuff === null || s.phase === 'ended',
+    { limit: 400 },
+  );
+  assert.equal(later.fighters[1].pendingBuff, null);
+});

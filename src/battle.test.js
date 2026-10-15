@@ -126,8 +126,17 @@ test('a crushing mismatch is over almost immediately', () => {
     }),
   );
   assert.equal(state.winner, 0);
-  const hits = events.filter((e) => e.type === 'damage' && e.source === 'action' && e.amount > 0);
-  assert.ok(hits.length <= 4, `expected a rout, took ${hits.length} hits`);
+  // A rout is about how few hits the FAVOURITE needed. The underdog's pinpricks land too
+  // (and are counted by a naive filter), but they are noise: a 94 CP 1-star robot does
+  // well under one point of damage per swing to a 604 CP 5-star frame.
+  const hitsOnLoser = events.filter(
+    (e) => e.type === 'damage' && e.source === 'action' && e.amount > 0 && e.fighter === 1,
+  );
+  assert.ok(hitsOnLoser.length <= 4, `expected a rout, the favourite needed ${hitsOnLoser.length} hits`);
+  assert.ok(
+    state.fighters[0].hp > state.fighters[0].maxHp * 0.95,
+    'the favourite should finish barely scratched',
+  );
 });
 
 test('every battle terminates', () => {

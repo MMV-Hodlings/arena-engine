@@ -441,6 +441,8 @@ function resolveAction(state, index, events) {
   });
   state.rng = roll.state;
   attacker.pendingBuff = null;
+  // A defensive buff is spent on the first hit it absorbs, not held until its owner acts.
+  if (defenderBuff.defMult) defender.pendingBuff = null;
 
   // Gust: one chance to evade, consumed whether or not it fires.
   let damage = roll.value;
