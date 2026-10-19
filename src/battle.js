@@ -9,12 +9,13 @@
  * is JSON-serialisable except `state.registry`, which holds the clash event modules;
  * `rehydrate(state)` reattaches them after a Durable Object restores from storage.
  *
- * Phases: intro -> fighting -> ended. Task 10 inserts a 'clash' phase between actions.
+ * Phases: intro -> fighting -> ended. Between actions an event runs as 'omen' (a hint, the fight
+ * paused) then 'clash' (an optional briefing, then the input window), and the fight resumes.
  */
 
 import { hashSeed, nextRandom } from './rng.js';
 import { deriveCombat, combatIndex } from './stats.js';
-import { rollDamage, suddenDeathMultiplier } from './damage.js';
+import { rollDamage } from './damage.js';
 import { MOMENTUM_START } from './momentum.js';
 import {
   applyElementStatus, tickStatuses, hasStatus, consumeStatus,
@@ -27,7 +28,7 @@ import { weightedPick } from './rng.js';
 import { CLASH_EVENTS, CLASH_WEIGHTS } from './events/index.js';
 import {
   ENGINE_VERSION, INTRO_MS, MAX_TICK_STEP_MS, MAX_BATTLE_MS,
-  SURGE_CHARGES_REQUIRED, SUDDEN_DEATH_START_MS, BIG_HIT_FRACTION,
+  SURGE_CHARGES_REQUIRED, BIG_HIT_FRACTION, OMEN_MS,
   CLASH_CHANCE_RAMP, MIN_BLOW_GAP_MS, LOW_HP_FRACTION,
 } from './constants.js';
 
@@ -72,9 +73,9 @@ export function createBattle({ seed, a, b, clashRegistry }) {
     actionCount: 0,
     // Actions by either robot since the last clash event closed: what the rising chance reads.
     actionsSinceClash: 0,
-    suddenDeathAnnounced: false,
     firstBloodDone: false,
     reelingClashDone: false,
+    omen: null,
     clash: null,
     registry: {
       events: clashRegistry?.events ?? CLASH_EVENTS,
@@ -190,6 +191,8 @@ function applyClashInput(state, input) {
       atMs: elapsedMs,
     }),
   };
+  // A decision event closes the moment both players have committed; the next tick resolves it.
+  if (event.settled?.(next.clash.eventState)) next.clash.endsAt = atMs;
   return { state: next, events: [] };
 }
 
@@ -205,11 +208,22 @@ function cloneState(state) {
       statuses: f.statuses.map((s) => ({ ...s })),
       pendingBuff: f.pendingBuff ? { ...f.pendingBuff } : null,
     })),
+    omen: state.omen ? { ...state.omen } : null,
     clash: state.clash ? { ...state.clash } : null,
   };
 }
 
 function advanceTo(state, target, events) {
+  // The omen: a hint holds the stage, the fight paused, until its event opens.
+  if (state.phase === 'omen') {
+    if (target < state.omen.opensAt) {
+      state.clockMs = target;
+      return;
+    }
+    state.clockMs = state.omen.opensAt;
+    openClash(state, events);
+  }
+
   // Bullet time: the fight is frozen until the event's window closes.
   if (state.phase === 'clash') {
     const clash = state.clash;
@@ -239,39 +253,59 @@ function advanceTo(state, target, events) {
 
   // Resolve every action whose gauge filled inside this slice, in time order.
   for (let guard = 0; guard < 16; guard++) {
-    if (state.phase === 'ended' || state.phase === 'clash') return;
+    if (state.phase !== 'fighting') return;
     const due = dueFighters(state.fighters, target);
     if (due.length === 0) break;
     const index = due[0];
     state.clockMs = Math.max(state.clockMs, state.fighters[index].nextActionAt);
-    announceSuddenDeath(state, events);
     resolveAction(state, index, events);
   }
 
-  if (state.phase === 'ended' || state.phase === 'clash') return;
+  if (state.phase !== 'fighting') return;
   state.clockMs = target;
-  announceSuddenDeath(state, events);
 
   if (state.clockMs >= MAX_BATTLE_MS) endByTimeout(state, events);
 }
 
-/** Opens a clash event: the fight freezes until its window closes. */
-function startClash(state, id, ctx, events) {
-  const event = state.registry.events[id];
-  if (!event) return;
-  const init = event.init(state.rng, ctx);
+/**
+ * An event has been drawn: its hint takes the stage for OMEN_MS before it opens, and the fight
+ * is paused from here until the event closes. `fighter` is the robot whose action drew it.
+ */
+function beginOmen(state, id, fighter, events) {
+  if (!state.registry.events[id]) return;
+  state.omen = { id, fighter, startedAt: state.clockMs, opensAt: state.clockMs + OMEN_MS };
+  state.phase = 'omen';
+  events.push({ t: state.clockMs, type: 'omen', id, fighter });
+}
+
+/**
+ * Opens the event the omen foreshadowed. A briefed event announces itself now and opens input
+ * `briefingMs` later; event modules measure time from `startedAt`, when input opens, so none of
+ * their geometry knows the briefing exists.
+ */
+function openClash(state, events) {
+  const omen = state.omen;
+  const event = state.registry.events[omen.id];
+  const init = event.init(state.rng, { heavyBy: omen.fighter });
   state.rng = init.state;
+  const announcedAt = state.clockMs;
+  const startedAt = announcedAt + (event.briefingMs ?? 0);
   state.clash = {
-    id,
+    id: omen.id,
     eventState: init.value,
-    startedAt: state.clockMs,
-    endsAt: state.clockMs + event.durationMs,
+    pausedFrom: omen.startedAt,
+    announcedAt,
+    startedAt,
+    endsAt: startedAt + event.durationMs,
   };
+  state.omen = null;
   state.phase = 'clash';
   events.push({
-    t: state.clockMs,
+    t: announcedAt,
     type: 'clashStart',
-    id,
+    id: omen.id,
+    announcedAt,
+    startedAt,
     endsAt: state.clash.endsAt,
     durationMs: event.durationMs,
     // What the client may draw. Without this the timing events are unplayable: a player
@@ -314,7 +348,8 @@ function resolveClash(state, events) {
   }
 
   state.phase = 'fighting';
-  const pausedFor = clash.endsAt - clash.startedAt;
+  // The fight was paused from the omen to the close, briefing included.
+  const pausedFor = clash.endsAt - (clash.pausedFrom ?? clash.startedAt);
   state.clash = null;
   // Push both gauges back by the frozen time so the resume is not a burst.
   for (const fighter of state.fighters) {
@@ -337,7 +372,6 @@ function resolveClash(state, events) {
       def: effectiveDefense(defender.statuses, defender.combat.def),
       actionMult: outcome.bonusHit.mult,
       momentum: attacker.momentum,
-      elapsedMs: state.clockMs,
     });
     state.rng = roll.state;
     if (roll.value > 0) applyDamage(state, target, roll.value, 'clash', events);
@@ -380,7 +414,6 @@ function runExchange(state, exchange, events, { source, by }) {
       def: effectiveDefense(defender.statuses, defender.combat.def),
       actionMult: side.damageMult * otherSide.takenMult,
       momentum: attacker.momentum,
-      elapsedMs: state.clockMs,
     });
     state.rng = roll.state;
     hits.push({ target: 1 - index, amount: roll.value });
@@ -439,17 +472,7 @@ function maybeStartClash(state, index, events) {
   if (entries.length === 0) return;
   const picked = weightedPick(state.rng, entries);
   state.rng = picked.state;
-  startClash(state, picked.value, { heavyBy: index }, events);
-}
-
-function announceSuddenDeath(state, events) {
-  if (state.suddenDeathAnnounced || state.clockMs < SUDDEN_DEATH_START_MS) return;
-  state.suddenDeathAnnounced = true;
-  events.push({
-    t: state.clockMs,
-    type: 'suddenDeath',
-    multiplier: suddenDeathMultiplier(state.clockMs),
-  });
+  beginOmen(state, picked.value, index, events);
 }
 
 function resolveAction(state, index, events) {
@@ -517,7 +540,6 @@ function resolveAction(state, index, events) {
     def: effectiveDefense(defender.statuses, defender.combat.def) * (defenderBuff.defMult ?? 1),
     actionMult: actionMult * (buff.atkMult ?? 1),
     momentum: attacker.momentum,
-    elapsedMs: state.clockMs,
   });
   state.rng = roll.state;
   attacker.pendingBuff = null;

@@ -5,7 +5,7 @@
  */
 
 import { randomRange } from '../rng.js';
-import { MOMENTUM_SHIFT } from '../constants.js';
+import { MOMENTUM_SHIFT, BRIEFING_MS } from '../constants.js';
 
 const DURATION_MS = 4000;
 /** Score reaches zero at this distance from the weak point, on a -1..1 track. */
@@ -14,6 +14,8 @@ const TOLERANCE = 0.5;
 export const targetingLock = Object.freeze({
   id: 'targetingLock',
   durationMs: DURATION_MS,
+  // The window is the skill being tested; the briefing in front of it says what to press.
+  briefingMs: BRIEFING_MS,
   momentumShift: MOMENTUM_SHIFT,
 
   init(rngState) {

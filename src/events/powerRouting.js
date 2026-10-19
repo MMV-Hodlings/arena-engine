@@ -1,13 +1,14 @@
 /**
- * Power Routing. Three energy pips, three places to put them, three seconds to decide. No
+ * Power Routing. Three energy pips, three places to put them, fifteen seconds to decide. No
  * reflex at all: this is the breather, and the accessible option for anyone who cannot
  * mash. It never moves momentum — both sides score a flat 0.5 — and instead hands out
  * buffs that land on the holder's next action.
  */
 
-import { MOMENTUM_SHIFT } from '../constants.js';
+import { MOMENTUM_SHIFT, DECISION_WINDOW_MS } from '../constants.js';
 
-const DURATION_MS = 3000;
+/** Fifteen seconds to decide, closing the moment both have committed (see `settled`). */
+const DURATION_MS = DECISION_WINDOW_MS;
 const PIPS = 3;
 const ATK_PER_PIP = 0.15;
 const DEF_PER_PIP = 0.15;
@@ -45,6 +46,11 @@ export const powerRouting = Object.freeze({
     return {
       pips: PIPS,
     };
+  },
+
+  /** Settled once both players have committed their pips. */
+  settled(eventState) {
+    return eventState.allocations.a !== null && eventState.allocations.b !== null;
   },
 
   score(eventState) {

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert';
-import { baseDamage, suddenDeathMultiplier, rollDamage, hitsToKill } from './damage.js';
+import * as damage from './damage.js';
+import { baseDamage, rollDamage, hitsToKill } from './damage.js';
 import { hashSeed } from './rng.js';
 
 test('a mirror match takes about ten hits at any tier', () => {
@@ -38,16 +39,12 @@ test('a guard deals no damage', () => {
   assert.equal(baseDamage({ atk: 500, def: 400, actionMult: 0 }), 0);
 });
 
-test('sudden death is inert before ninety seconds', () => {
-  assert.equal(suddenDeathMultiplier(0), 1);
-  assert.equal(suddenDeathMultiplier(89_999), 1);
-});
-
-test('sudden death compounds every fifteen seconds from ninety', () => {
-  assert.ok(Math.abs(suddenDeathMultiplier(90_000) - 1.2) < 1e-9);
-  assert.ok(Math.abs(suddenDeathMultiplier(104_999) - 1.2) < 1e-9);
-  assert.ok(Math.abs(suddenDeathMultiplier(105_000) - 1.44) < 1e-9);
-  assert.ok(Math.abs(suddenDeathMultiplier(120_000) - 1.728) < 1e-9);
+// The battle pacing design removed sudden death: a blow at five minutes hits as hard as one at
+// five seconds, and battles end because robots keep dealing damage, not because damage escalates.
+test('damage does not grow with time', () => {
+  const args = { atk: 300, def: 200, actionMult: 1, momentum: 1 };
+  assert.equal(rollDamage(7, { ...args, elapsedMs: 0 }).value, rollDamage(7, { ...args, elapsedMs: 500_000 }).value);
+  assert.equal('suddenDeathMultiplier' in damage, false);
 });
 
 test('rollDamage stays within the variance band and is deterministic', () => {

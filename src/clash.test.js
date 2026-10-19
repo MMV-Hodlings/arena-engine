@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert';
 import { createBattle, step } from './battle.js';
 import { toFighter } from './stats.js';
-import { MAX_TICK_STEP_MS, MOMENTUM_SHIFT } from './constants.js';
+import { MAX_TICK_STEP_MS, MOMENTUM_SHIFT, OMEN_MS, BRIEFING_MS } from './constants.js';
 import { read } from './events/read.js';
 
 const fighter = (over = {}) =>
@@ -250,4 +250,91 @@ test('a decided Read banks no Surge charge', () => {
 
   const after = advanceUntil(state, (s) => s.phase !== 'clash');
   assert.equal(after.events.filter((e) => e.type === 'surge').length, 0);
+});
+
+// ── The battle pacing design: omens, briefings and decision windows that close early ──
+
+test('an event is foreshadowed: its omen comes OMEN_MS before it, and no action lands between', () => {
+  const { events } = advanceUntil(battleWith(scripted({ a: 1, b: 0 })), (s) => s.phase === 'clash');
+  const omen = events.find((e) => e.type === 'omen');
+  const start = events.find((e) => e.type === 'clashStart');
+  assert.ok(omen, 'no omen before the event');
+  assert.equal(omen.id, 'scripted');
+  assert.equal(start.t - omen.t, OMEN_MS);
+  assert.equal(events.filter((e) => e.type === 'action' && e.t > omen.t).length, 0);
+  assert.equal(omen.fighter, events.filter((e) => e.type === 'action' && e.t <= omen.t).at(-1).fighter);
+});
+
+test('clash input during the omen changes nothing', () => {
+  const { state } = advanceUntil(battleWith(scripted({ a: 0.5, b: 0.5 })), (s) => s.phase === 'omen');
+  assert.equal(state.phase, 'omen', 'no omen phase was reached');
+  const result = step(state, { type: 'clashInput', player: 'a', payload: {}, atMs: state.clockMs });
+  assert.equal(result.state, state);
+  assert.deepEqual(result.events, []);
+});
+
+test('a briefed event announces itself, then opens input BRIEFING_MS later', () => {
+  const event = scripted({ a: 0.5, b: 0.5 }, { briefingMs: BRIEFING_MS });
+  const { state, events } = advanceUntil(battleWith(event), (s) => s.phase === 'clash');
+  const start = events.find((e) => e.type === 'clashStart');
+  assert.equal(start.announcedAt, start.t);
+  assert.equal(start.startedAt - start.announcedAt, BRIEFING_MS);
+  assert.equal(start.endsAt - start.startedAt, event.durationMs);
+  const early = step(state, { type: 'clashInput', player: 'a', payload: {}, atMs: start.startedAt - 1 });
+  assert.equal(early.state.clash.eventState.inputs.length, 0);
+  const onTime = step(state, { type: 'clashInput', player: 'a', payload: {}, atMs: start.startedAt });
+  assert.equal(onTime.state.clash.eventState.inputs.length, 1);
+});
+
+test('an event with no briefing opens input as it is announced', () => {
+  const { events } = advanceUntil(battleWith(scripted({ a: 0.5, b: 0.5 })), (s) => s.phase === 'clash');
+  const start = events.find((e) => e.type === 'clashStart');
+  assert.equal(start.announcedAt, start.t);
+  assert.equal(start.startedAt, start.announcedAt);
+});
+
+test('the fight stays frozen from the omen to the close, then resumes without a burst', () => {
+  const { events } = advanceUntil(battleWith(scripted({ a: 0.5, b: 0.5 })), (s, seen) => {
+    const end = seen.find((e) => e.type === 'clashEnd');
+    return !!end && seen.filter((e) => e.type === 'action' && e.t >= end.t).length >= 2;
+  });
+  const omen = events.find((e) => e.type === 'omen');
+  const end = events.find((e) => e.type === 'clashEnd');
+  assert.ok(omen && end, 'no event ran to its close');
+  assert.equal(events.filter((e) => e.type === 'action' && e.t > omen.t && e.t < end.t).length, 0);
+  const after = events.filter((e) => e.type === 'action' && e.t >= end.t);
+  assert.ok(after.length >= 2 && after[1].t - after[0].t >= 2000);
+});
+
+const decision = () => scripted({ a: 0.5, b: 0.5 }, { durationMs: 15_000, settled: (s) => s.inputs.length >= 2 });
+
+test('a settled event closes at the moment it settles', () => {
+  let { state } = advanceUntil(battleWith(decision()), (s) => s.phase === 'clash');
+  const opened = state.clash.startedAt;
+  state = step(state, { type: 'clashInput', player: 'a', payload: {}, atMs: opened + 1000 }).state;
+  assert.equal(state.clash.endsAt, opened + 15_000);
+  state = step(state, { type: 'clashInput', player: 'b', payload: {}, atMs: opened + 3000 }).state;
+  assert.equal(state.clash.endsAt, opened + 3000);
+  const ends = advanceUntil(state, (s) => s.phase !== 'clash').events.filter((e) => e.type === 'clashEnd');
+  assert.equal(ends.length, 1);
+  assert.equal(ends[0].t, opened + 3000);
+});
+
+test('one commit alone runs the whole window', () => {
+  let { state } = advanceUntil(battleWith(decision()), (s) => s.phase === 'clash');
+  const opened = state.clash.startedAt;
+  state = step(state, { type: 'clashInput', player: 'a', payload: {}, atMs: opened + 1000 }).state;
+  const ends = advanceUntil(state, (s) => s.phase !== 'clash').events.filter((e) => e.type === 'clashEnd');
+  assert.equal(ends.length, 1);
+  assert.equal(ends[0].t, opened + 15_000);
+});
+
+test('a commit at the last moment of the window closes it once', () => {
+  let { state } = advanceUntil(battleWith(decision()), (s) => s.phase === 'clash');
+  const opened = state.clash.startedAt;
+  state = step(state, { type: 'clashInput', player: 'a', payload: {}, atMs: opened + 1000 }).state;
+  state = step(state, { type: 'clashInput', player: 'b', payload: {}, atMs: opened + 15_000 }).state;
+  const ends = advanceUntil(state, (s) => s.phase !== 'clash').events.filter((e) => e.type === 'clashEnd');
+  assert.equal(ends.length, 1);
+  assert.equal(ends[0].t, opened + 15_000);
 });

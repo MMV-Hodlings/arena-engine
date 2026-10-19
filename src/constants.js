@@ -62,10 +62,26 @@ export const MIN_BLOW_GAP_MS = 2000;
  */
 export const CLASH_CHANCE_RAMP = Object.freeze([0.3, 0.6, 1]);
 
-/** (spec) From 90s, all damage multiplies by 1.2 every further 15s, compounding. */
-export const SUDDEN_DEATH_START_MS = 90_000;
-export const SUDDEN_DEATH_STEP_MS = 15_000;
-export const SUDDEN_DEATH_FACTOR = 1.2;
+/**
+ * (pacing design) How long a hint line holds the stage before its event opens. The fight is
+ * paused for it: no action resolves between the hint and the event's close. 5s is the owner's
+ * call at review, up from a proposed 2.5s.
+ */
+export const OMEN_MS = 5000;
+
+/**
+ * (pacing design) The briefing before input opens on a timing event (Reflex Strike, Targeting
+ * Lock, Sequence Lock, Tug of War, Overload Surge): the event's name, its instruction and its
+ * keys. Their windows are the skill being tested, so they keep their lengths and gain this
+ * beat in front instead.
+ */
+export const BRIEFING_MS = 2000;
+
+/**
+ * (pacing design) The window for the two decision events, the Read and Power Routing. Either
+ * closes the moment both players have committed, so fifteen seconds is a ceiling, not a wait.
+ */
+export const DECISION_WINDOW_MS = 15_000;
 
 /** (spec) Element Surge needs this many charges. */
 export const SURGE_CHARGES_REQUIRED = 3;
@@ -82,8 +98,13 @@ export const LOW_HP_FRACTION = 0.25;
 /** The largest slice of time one tick may advance. Guards against hibernation wake-ups. */
 export const MAX_TICK_STEP_MS = 250;
 
-/** Hard ceiling on battle length, after which the engine declares a result regardless. */
-export const MAX_BATTLE_MS = 600_000;
+/**
+ * Hard ceiling on battle length, after which the engine declares a result regardless. A hidden
+ * safety net, not a mechanic: sudden death is gone (pacing design), and battles end because every
+ * robot keeps landing damage. Fifteen minutes, up from ten, because the longest simulated battle
+ * (two defensive robots) ran about ten.
+ */
+export const MAX_BATTLE_MS = 900_000;
 
 /** Intro beat before the fighting starts: banners, VS flash, sprite entrances. */
 export const INTRO_MS = 3000;

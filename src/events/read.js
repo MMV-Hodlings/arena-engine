@@ -6,14 +6,15 @@
  */
 
 import { resolveStances } from '../actions.js';
-import { MOMENTUM_SHIFT_READ } from '../constants.js';
+import { MOMENTUM_SHIFT_READ, DECISION_WINDOW_MS } from '../constants.js';
 
 const STANCES = ['strike', 'guard', 'overload'];
 const DEFAULT_STANCE = 'guard';
 
 export const read = Object.freeze({
   id: 'read',
-  durationMs: 3000,
+  // Fifteen seconds to choose, closing the moment both have (see `settled`).
+  durationMs: DECISION_WINDOW_MS,
   momentumShift: MOMENTUM_SHIFT_READ,
 
   /** @param {number} rngState @param {{heavyBy: 0|1}} ctx */
@@ -40,6 +41,15 @@ export const read = Object.freeze({
    */
   publicState(eventState) {
     return { heavyBy: eventState.heavyBy };
+  },
+
+  /**
+   * Settled once both players have picked. Closing early leaks nothing: a pick is binding the
+   * moment it is made and the window only closes once both have picked, so a player who has not
+   * picked yet sees an open window whatever the opponent has done.
+   */
+  settled(eventState) {
+    return eventState.picks.a !== null && eventState.picks.b !== null;
   },
 
   score(eventState) {

@@ -5,7 +5,7 @@
  */
 
 import { emptyMashSide, acceptTaps } from './mash.js';
-import { MOMENTUM_SHIFT } from '../constants.js';
+import { MOMENTUM_SHIFT, BRIEFING_MS } from '../constants.js';
 
 /** Taps needed to fill the gauge across the window: 6 per second over 4 seconds. */
 const TARGET_TAPS = 24;
@@ -13,6 +13,8 @@ const TARGET_TAPS = 24;
 export const overloadSurge = Object.freeze({
   id: 'overloadSurge',
   durationMs: 4000,
+  // The window is the skill being tested; the briefing in front of it says what to press.
+  briefingMs: BRIEFING_MS,
   momentumShift: MOMENTUM_SHIFT,
 
   init(rngState) {

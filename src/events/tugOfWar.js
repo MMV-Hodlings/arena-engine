@@ -5,7 +5,7 @@
  */
 
 import { emptyMashSide, acceptTaps } from './mash.js';
-import { MOMENTUM_SHIFT } from '../constants.js';
+import { MOMENTUM_SHIFT, BRIEFING_MS } from '../constants.js';
 
 /** How far one clamped tap moves the bar, and how hard the loser is hit. */
 const STEP = 0.02;
@@ -14,6 +14,8 @@ const BONUS_HIT_MULT = 0.5;
 export const tugOfWar = Object.freeze({
   id: 'tugOfWar',
   durationMs: 5000,
+  // The window is the skill being tested; the briefing in front of it says what to press.
+  briefingMs: BRIEFING_MS,
   momentumShift: MOMENTUM_SHIFT,
 
   init(rngState) {

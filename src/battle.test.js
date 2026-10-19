@@ -156,15 +156,36 @@ test('every battle terminates', () => {
   }
 });
 
-test('sudden death is announced once and only once', () => {
-  const { events } = runToEnd(
+test('there is no sudden death', () => {
+  const { state, events } = runToEnd(
     createBattle({
       seed: 'sudden',
       a: fighter({ attack: 1, defense: 5, hp: 5, posture: 'defensive' }),
       b: fighter({ asset_id: '2', attack: 1, defense: 5, hp: 5, posture: 'defensive' }),
     }),
   );
-  assert.equal(events.filter((e) => e.type === 'suddenDeath').length, 1);
+  assert.ok(state.clockMs > 90_000, `the battle ended at ${state.clockMs}ms, before sudden death would have begun`);
+  assert.equal(events.filter((e) => e.type === 'suddenDeath').length, 0);
+});
+
+test('the hidden limit is fifteen minutes', () => {
+  assert.equal(MAX_BATTLE_MS, 900_000);
+});
+
+test('a knockout never leaves an omen or a clash open', () => {
+  for (let i = 0; i < 100; i++) {
+    const { state, events } = runToEnd(
+      createBattle({ seed: `omen-ko-${i}`, a: fighter({ cp: 94 + i * 3 }), b: fighter({ asset_id: '2', cp: 94 + i * 2 }) }),
+    );
+    assert.equal(state.phase, 'ended', `omen-ko-${i} never ended`);
+    assert.equal(state.omen, null, `omen-ko-${i} ended with an omen pending`);
+    assert.equal(state.clash, null, `omen-ko-${i} ended with a clash open`);
+    assert.equal(
+      events.filter((e) => e.type === 'omen').length,
+      events.filter((e) => e.type === 'clashStart').length,
+      `omen-ko-${i}: an omen was never followed by its event`,
+    );
+  }
 });
 
 test('a knockout ends the battle and nothing happens afterwards', () => {

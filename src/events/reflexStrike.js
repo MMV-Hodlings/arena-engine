@@ -5,7 +5,7 @@
  */
 
 import { randomRange } from '../rng.js';
-import { MOMENTUM_SHIFT } from '../constants.js';
+import { MOMENTUM_SHIFT, BRIEFING_MS } from '../constants.js';
 
 const DURATION_MS = 3000;
 const TOLERANCE_MS = 350;
@@ -13,6 +13,8 @@ const TOLERANCE_MS = 350;
 export const reflexStrike = Object.freeze({
   id: 'reflexStrike',
   durationMs: DURATION_MS,
+  // The window is the skill being tested; the briefing in front of it says what to press.
+  briefingMs: BRIEFING_MS,
   momentumShift: MOMENTUM_SHIFT,
 
   init(rngState) {
