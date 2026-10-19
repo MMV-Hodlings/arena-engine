@@ -48,15 +48,30 @@ function marginOf(winner) {
   return 'clear';
 }
 
+/** The most dramatic moment in a list, by MOMENT_ORDER, or undefined. */
+function topMoment(moments) {
+  return MOMENT_ORDER.find((id) => Array.isArray(moments) && moments.includes(id));
+}
+
+/**
+ * A moment told as a sentence of its own, for lines that keep their own sentence first (a surge,
+ * an exchange). `attacker` dealt the hit that made it, `target` took it.
+ */
+function momentSentence(moment, attacker, target, key) {
+  return moment && attacker && target ? pick(LINES.moment[moment], `${key}:${moment}`)(attacker, target) : null;
+}
+
 function narrateBlow(event, self, other, key) {
   if (event.action === 'heavy') return null; // its exchange tells the whole swing
   if (event.evaded) return { text: pick(LINES.evaded, key)(self, other), tone: 'action' };
   if (event.action === 'guard') return { text: pick(LINES.guard, key)(self, other), tone: 'action' };
   if (event.action === 'surge') {
     const set = LINES.surge[self.element] ?? LINES.surgeAny;
-    return { text: withAmount(pick(set, key)(self, other), event.amount), tone: 'crit' };
+    const moment = momentSentence(topMoment(event.moments), self, other, key);
+    const sentence = pick(set, key)(self, other);
+    return { text: withAmount(moment ? `${sentence} ${moment}` : sentence, event.amount), tone: 'crit' };
   }
-  const moment = MOMENT_ORDER.find((id) => Array.isArray(event.moments) && event.moments.includes(id));
+  const moment = topMoment(event.moments);
   if (moment) return { text: withAmount(pick(LINES.moment[moment], key)(self, other), event.amount), tone: 'crit' };
   const size = sizeOf(event.amount, other);
   return {
@@ -78,6 +93,17 @@ function narrateExchange(event, fighters, key) {
     if (set && pair[0] && pair[1]) sentence = pick(set, key)(pair[0], pair[1]);
   }
   if (!sentence) return null;
+  // A heavy swing or a Read can draw first blood, take a robot below half, and so on: the most
+  // dramatic moment either hit made is told after the contest, by whoever dealt that hit.
+  let best = null;
+  for (const hit of Array.isArray(event.hits) ? event.hits : []) {
+    const moment = topMoment(hit?.moments);
+    if (moment && (!best || MOMENT_ORDER.indexOf(moment) < MOMENT_ORDER.indexOf(best.moment))) best = { moment, hit };
+  }
+  if (best) {
+    const told = momentSentence(best.moment, pair[1 - best.hit.fighter], pair[best.hit.fighter], key);
+    if (told) sentence = `${sentence} ${told}`;
+  }
   const hits = (Array.isArray(event.hits) ? event.hits : [])
     .filter((hit) => rounded(hit.amount) > 0)
     .map((hit) => `${rounded(hit.amount)} to ${pair[hit.fighter]?.name ?? 'its target'}`);

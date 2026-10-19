@@ -232,3 +232,21 @@ test('an ending reads by its margin', () => {
     assert.ok(LINES.ko[margin].map((template) => template(pair[0], pair[1])).includes(line.text), `${hp}: ${line.text}`);
   }
 });
+
+// Final review: half of all moment tags rode on heavy swings, Reads and surges and never reached the log.
+test('a big moment in an exchange or a surge is told too, beside its contest', () => {
+  const hits = [{ fighter: 1, amount: 210, moments: ['half'] }, { fighter: 0, amount: 30, moments: [] }];
+  const half = LINES.moment.half.map((template) => template(sized[0], sized[1]));
+  for (let t = 0; t < 6; t++) {
+    const line = narrate({ t, type: 'exchange', source: 'heavy', by: 0, stances: { a: 'overload', b: 'guard' }, outcome: 'a', hits }, sized);
+    assert.ok(half.some((sentence) => line.text.includes(sentence)), line.text);
+    assert.match(line.text, /\b210\b/);
+    const contest = LINES.heavy.guard.map((template) => template(sized[0], sized[1]));
+    assert.ok(contest.some((sentence) => line.text.startsWith(sentence)), `the contest went missing: ${line.text}`);
+  }
+  const surge = narrate({ t: 9, type: 'action', fighter: 0, action: 'surge', amount: 120, moments: ['firstBlood'] }, sized);
+  const firstBlood = LINES.moment.firstBlood.map((template) => template(sized[0], sized[1]));
+  assert.ok(firstBlood.some((sentence) => surge.text.includes(sentence)), surge.text);
+  const plainSurge = narrate({ t: 9, type: 'action', fighter: 0, action: 'surge', amount: 120, moments: [] }, sized);
+  assert.ok(!firstBlood.some((sentence) => plainSurge.text.includes(sentence)), plainSurge.text);
+});
