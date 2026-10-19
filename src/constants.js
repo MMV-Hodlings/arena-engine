@@ -10,8 +10,9 @@
  *
  * Held at 1.0.0 through development (the owner's call, 2026-10-19): no real player has fought a
  * battle yet, so there is no record a mismatch could protect, and the changes made so far — the
- * stance rebalance, mutual guard banking a Surge charge, a Read on one heavy swing in five — all
- * ship as 1.0.0. The cost is that a replay can no longer tell two engines apart, so the worker
+ * stance rebalance, mutual guard banking a Surge charge, and the battle pacing design (events drawn
+ * on a rising chance, heavy swings settled at once, omens, briefings, no sudden death) — all ship
+ * as 1.0.0. The cost is that a replay can no longer tell two engines apart, so the worker
  * and the frontend must run the same engine commit; a battle rebuilt by a different one is
  * refused rather than flagged. From the first real battle on, bump this in the same change as
  * any edit to the simulation.
@@ -36,24 +37,30 @@ export const MOMENTUM_SHIFT_READ = 0.05;
 /** (spec) Total damage swing achievable through skill. Enforced by a property test. */
 export const SKILL_INFLUENCE_CAP = 0.2;
 
-/** (spec) Action gauge cadence and its jitter, in milliseconds. */
-export const ACTION_CADENCE_MS = 4000;
+/**
+ * (pacing design) Action gauge cadence and its jitter, in milliseconds. Six seconds rather than
+ * the original four: with two robots that is an action roughly every three seconds, which is a
+ * pace a person can read in the log.
+ */
+export const ACTION_CADENCE_MS = 6000;
 export const ACTION_JITTER = 0.15;
 
-/** (spec) Chance a clash event fires on an action resolution. ~5 per battle over ~20 actions. */
-export const CLASH_CHANCE = 0.2;
+/**
+ * (pacing design) The least time between any two actions, whichever robot takes them. The two
+ * gauges run independently, so without this both robots could act a fraction of a second apart
+ * and the log would land two blows at once.
+ */
+export const MIN_BLOW_GAP_MS = 2000;
 
 /**
- * Chance that a heavy swing's telegraph becomes a Read; otherwise the swing lands at once as a
- * plain overload (1.6x, and the defender banks a Surge charge for reading the wind-up).
- *
- * Not (spec): §3.7 opens a Read on every telegraph. That path runs outside CLASH_CHANCE, so it
- * stacked on top of the ~5 random events: measured over 5,200 balanced mirror matches, a Read
- * was 46% of all clash events (4.2 a battle, 59% for aggressive robots) and a battle held ~9
- * clashes rather than ~5. At one in five a Read is about as common as each other event (~0.8 a
- * battle) and a battle holds ~6.
+ * (pacing design) The chance that an action opens a clash event, by how many actions (either
+ * robot's) have passed since the last event closed: 0.3 after one, 0.6 after two, certain on the
+ * third. It replaces a flat 20%, which with a Read on every heavy swing gave ~9 events a battle,
+ * nearly half of them Reads. Drawing the Read like any other event and rising with each action
+ * keeps ~9 events (measured: 8.9 in balanced mirrors) but spreads them evenly: never more than
+ * three actions without one, and only 37% straight after another. Forced events ignore it.
  */
-export const READ_CHANCE_ON_HEAVY = 0.2;
+export const CLASH_CHANCE_RAMP = Object.freeze([0.3, 0.6, 1]);
 
 /** (spec) From 90s, all damage multiplies by 1.2 every further 15s, compounding. */
 export const SUDDEN_DEATH_START_MS = 90_000;

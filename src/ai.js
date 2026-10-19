@@ -11,6 +11,7 @@
 import { nextRandom, randomRange, randomInt } from './rng.js';
 import { CLASH_EVENTS } from './events/index.js';
 import { MAX_TAPS_PER_SECOND } from './constants.js';
+import { OPTIMAL_STANCE_MIX } from './actions.js';
 
 const POSTURES = ['aggressive', 'balanced', 'defensive'];
 
@@ -25,11 +26,7 @@ const POSTURES = ['aggressive', 'balanced', 'defensive'];
  * uniform and optimal, so a weak opponent is still exploitable — which is the point of a low
  * competence — but never exploitable by always pressing the same button.
  */
-const STANCE_MIX = Object.freeze([
-  ['strike', 0.38],
-  ['guard', 0.39],
-  ['overload', 0.23],
-]);
+const STANCE_MIX = OPTIMAL_STANCE_MIX;
 
 /** @param {number} competence 0..1 @param {number} roll 0..1 */
 function stanceFor(competence, roll) {

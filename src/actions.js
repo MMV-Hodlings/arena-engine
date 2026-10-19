@@ -21,7 +21,20 @@ export const ACTION_MULT = Object.freeze({
   counter: 0.6,
 });
 
-/** Base weights per posture. "heavy" is an overload that telegraphs and opens a Read event. */
+/**
+ * The stance triangle's optimal mix: strike 38%, guard 39%, overload 23%. It follows from the
+ * margins in resolveStances below (a stance's share is proportional to the margin of the matchup
+ * it sits out of). Two things read it: the practice AI, which interpolates towards it with
+ * competence, and a heavy swing, whose target answers with a stance drawn from it — against this
+ * mix an overload gains nothing on average, so a heavy swing is a gamble and never free damage.
+ */
+export const OPTIMAL_STANCE_MIX = Object.freeze([
+  ['strike', 0.38],
+  ['guard', 0.39],
+  ['overload', 0.23],
+]);
+
+/** Base weights per posture. "heavy" is an overload, settled at once through the stance triangle. */
 const POSTURE_WEIGHTS = Object.freeze({
   aggressive: { strike: 5, heavy: 3, guard: 1 },
   balanced: { strike: 5, heavy: 2, guard: 2 },

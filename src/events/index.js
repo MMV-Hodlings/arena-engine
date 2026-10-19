@@ -24,16 +24,19 @@ export const CLASH_EVENTS = Object.freeze({
 });
 
 /**
- * Relative likelihood of each event. The Read is reserved for heavy telegraphs and is
- * never drawn at random, so it carries no weight here.
+ * Relative likelihood of each event. Every event is equally likely except Power Routing, the
+ * breather, at three quarters of the rest (the battle pacing design, 2026-10-19). The Read is
+ * drawn like any other event: it used to open on every heavy swing, outside this table, which
+ * made it nearly half of all events.
  */
 export const CLASH_WEIGHTS = Object.freeze({
+  [read.id]: 2,
   [tugOfWar.id]: 2,
   [overloadSurge.id]: 2,
-  [reflexStrike.id]: 3,
+  [reflexStrike.id]: 2,
   [targetingLock.id]: 2,
   [sequenceLock.id]: 2,
-  [powerRouting.id]: 1,
+  [powerRouting.id]: 1.5,
 });
 
 /**

@@ -20,16 +20,15 @@ import {
   applyElementStatus, tickStatuses, hasStatus, consumeStatus,
   effectiveDefense, burnDamage, GUST_EVADE_CHANCE, DRENCH_CHARGE_LOSS,
 } from './status.js';
-import { ACTION_MULT, chooseAction, resolveStances } from './actions.js';
+import { ACTION_MULT, chooseAction, resolveStances, OPTIMAL_STANCE_MIX } from './actions.js';
 import { scheduleNextAction, dueFighters } from './timeline.js';
 import { applyClashScores } from './momentum.js';
 import { weightedPick } from './rng.js';
 import { CLASH_EVENTS, CLASH_WEIGHTS } from './events/index.js';
-import { read } from './events/read.js';
 import {
   ENGINE_VERSION, INTRO_MS, MAX_TICK_STEP_MS, MAX_BATTLE_MS,
   SURGE_CHARGES_REQUIRED, SUDDEN_DEATH_START_MS, BIG_HIT_FRACTION,
-  CLASH_CHANCE, LOW_HP_FRACTION, READ_CHANCE_ON_HEAVY,
+  CLASH_CHANCE_RAMP, MIN_BLOW_GAP_MS, LOW_HP_FRACTION,
 } from './constants.js';
 
 /**
@@ -71,6 +70,8 @@ export function createBattle({ seed, a, b, clashRegistry }) {
     winner: null,
     endReason: null,
     actionCount: 0,
+    // Actions by either robot since the last clash event closed: what the rising chance reads.
+    actionsSinceClash: 0,
     suddenDeathAnnounced: false,
     firstBloodDone: false,
     reelingClashDone: false,
@@ -320,8 +321,10 @@ function resolveClash(state, events) {
     fighter.nextActionAt = Math.max(fighter.nextActionAt + pausedFor, state.clockMs + 1);
   }
 
+  state.actionsSinceClash = 0;
+
   if (outcome.exchange) {
-    runExchange(state, outcome.exchange, events);
+    runExchange(state, outcome.exchange, events, { source: 'read', by: clash.eventState?.heavyBy ?? 0 });
     if (state.phase === 'ended') return;
   }
 
@@ -358,8 +361,12 @@ function applyBuff(state, index, buff, events) {
   fighter.pendingBuff = Object.keys(carried).length > 0 ? carried : null;
 }
 
-/** The Read: both committed stances resolve into one simultaneous exchange. */
-function runExchange(state, exchange, events) {
+/**
+ * Two committed stances resolve into one simultaneous exchange: a Read's, or a heavy swing's,
+ * where the swinger overloads and the target answers from the optimal mix. `source` and `by`
+ * (the robot that wound up) travel on the event so narration can tell the two apart.
+ */
+function runExchange(state, exchange, events, { source, by }) {
   const resolved = resolveStances(exchange.a, exchange.b);
   const hits = [];
   for (const index of [0, 1]) {
@@ -381,6 +388,8 @@ function runExchange(state, exchange, events) {
   events.push({
     t: state.clockMs,
     type: 'exchange',
+    source,
+    by,
     stances: exchange,
     outcome: resolved.outcome,
   });
@@ -406,10 +415,12 @@ function runExchange(state, exchange, events) {
 }
 
 /**
- * Spec section 4: ~20% of action resolutions, plus a forced event at first blood and when
- * either robot drops below a quarter HP.
+ * Spec section 4, as amended by the pacing design: a chance that rises with every action since
+ * the last event closed (CLASH_CHANCE_RAMP), plus a forced event at first blood and when either
+ * robot drops below a quarter HP. `index` is the robot whose action just resolved: a Read drawn
+ * here is that robot winding up.
  */
-function maybeStartClash(state, events) {
+function maybeStartClash(state, index, events) {
   if (state.phase !== 'fighting' || state.clash) return;
 
   const reeling = state.fighters.some((f) => f.hp > 0 && f.hp / f.maxHp <= LOW_HP_FRACTION);
@@ -421,13 +432,14 @@ function maybeStartClash(state, events) {
 
   const roll = nextRandom(state.rng);
   state.rng = roll.state;
-  if (!forced && roll.value >= CLASH_CHANCE) return;
+  const step = Math.min(Math.max(state.actionsSinceClash, 1), CLASH_CHANCE_RAMP.length);
+  if (!forced && roll.value >= CLASH_CHANCE_RAMP[step - 1]) return;
 
   const entries = Object.entries(state.registry.weights).filter(([id]) => state.registry.events[id]);
   if (entries.length === 0) return;
   const picked = weightedPick(state.rng, entries);
   state.rng = picked.state;
-  startClash(state, picked.value, { heavyBy: null }, events);
+  startClash(state, picked.value, { heavyBy: index }, events);
 }
 
 function announceSuddenDeath(state, events) {
@@ -471,28 +483,24 @@ function resolveAction(state, index, events) {
     return;
   }
 
-  // "heavy" is a telegraphed overload. One swing in five (READ_CHANCE_ON_HEAVY) becomes a
-  // Read; the rest resolve directly below, and the wind-up leaves the attacker open — the
-  // defender banks a surge charge for reading it.
-  const isHeavy = action === 'heavy';
-  const isSurge = action === 'surge';
-
-  // A Read swing opens the event instead of resolving directly. The actionsTaken increment
-  // above already counted it, and skipClashRoll keeps finishAction from starting a random
-  // event that startClash would overwrite. The roll is drawn only for a heavy swing, so no
-  // other action's randomness moves.
-  if (isHeavy && state.registry.events[read.id]) {
-    const readRoll = nextRandom(state.rng);
-    state.rng = readRoll.state;
-    if (readRoll.value < READ_CHANCE_ON_HEAVY) {
-      events.push({ t: state.clockMs, type: 'action', fighter: index, action: 'telegraph' });
-      finishAction(state, index, events, { skipClashRoll: true });
-      startClash(state, read.id, { heavyBy: index }, events);
-      return;
-    }
+  // A heavy swing settles at once through the stance triangle: the swinger overloads and the
+  // target answers with a stance drawn from the optimal mix. Against that mix an overload gains
+  // nothing on average, so the swing is a gamble rather than free damage. (Opening a Read on
+  // every heavy swing made the Read half of all events; letting four in five land as a plain
+  // 1.6x hit had aggressive robots beating defensive ones 87% of the time.)
+  if (action === 'heavy') {
+    const answer = weightedPick(state.rng, OPTIMAL_STANCE_MIX);
+    state.rng = answer.state;
+    events.push({ t: state.clockMs, type: 'action', fighter: index, action: 'heavy' });
+    const stances = index === 0 ? { a: 'overload', b: answer.value } : { a: answer.value, b: 'overload' };
+    runExchange(state, stances, events, { source: 'heavy', by: index });
+    if (state.phase === 'ended') return;
+    finishAction(state, index, events);
+    return;
   }
 
-  const actionMult = isHeavy ? ACTION_MULT.overload : isSurge ? ACTION_MULT.surge : ACTION_MULT.strike;
+  const isSurge = action === 'surge';
+  const actionMult = isSurge ? ACTION_MULT.surge : ACTION_MULT.strike;
 
   // Every surge change is announced: the client is a renderer and rebuilds its meter
   // from the event stream alone, so a silent change desynchronises it for the rest of
@@ -500,10 +508,6 @@ function resolveAction(state, index, events) {
   if (isSurge) {
     attacker.surge = Math.max(0, attacker.surge - SURGE_CHARGES_REQUIRED);
     events.push({ t: state.clockMs, type: 'surge', fighter: index, charges: attacker.surge });
-  }
-  if (isHeavy) {
-    defender.surge += 1;
-    events.push({ t: state.clockMs, type: 'surge', fighter: 1 - index, charges: defender.surge });
   }
 
   const buff = attacker.pendingBuff ?? {};
@@ -535,7 +539,7 @@ function resolveAction(state, index, events) {
     t: state.clockMs,
     type: 'action',
     fighter: index,
-    action: isHeavy ? 'overload' : action,
+    action,
     evaded,
   });
 
@@ -565,8 +569,11 @@ function resolveAction(state, index, events) {
   finishAction(state, index, events);
 }
 
-/** Statuses on the acting robot count down on its own actions, then the gauge resets. */
-function finishAction(state, index, events, { skipClashRoll = false } = {}) {
+/**
+ * Statuses on the acting robot count down on its own actions, then the gauge resets. The other
+ * robot's next action is held at least MIN_BLOW_GAP_MS away, so two blows never land together.
+ */
+function finishAction(state, index, events) {
   const attacker = state.fighters[index];
   const before = attacker.statuses.map((s) => s.id);
   attacker.statuses = tickStatuses(attacker.statuses);
@@ -580,8 +587,12 @@ function finishAction(state, index, events, { skipClashRoll = false } = {}) {
   attacker.nextActionAt = schedule.value;
   state.rng = schedule.state;
   state.actionCount += 1;
+  state.actionsSinceClash += 1;
 
-  if (!skipClashRoll) maybeStartClash(state, events);
+  const other = state.fighters[1 - index];
+  other.nextActionAt = Math.max(other.nextActionAt, state.clockMs + MIN_BLOW_GAP_MS);
+
+  maybeStartClash(state, index, events);
 }
 
 function applyDamage(state, index, amount, source, events) {
