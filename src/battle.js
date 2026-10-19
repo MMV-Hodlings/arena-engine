@@ -29,7 +29,7 @@ import { read } from './events/read.js';
 import {
   ENGINE_VERSION, INTRO_MS, MAX_TICK_STEP_MS, MAX_BATTLE_MS,
   SURGE_CHARGES_REQUIRED, SUDDEN_DEATH_START_MS, BIG_HIT_FRACTION,
-  CLASH_CHANCE, LOW_HP_FRACTION,
+  CLASH_CHANCE, LOW_HP_FRACTION, READ_CHANCE_ON_HEAVY,
 } from './constants.js';
 
 /**
@@ -471,20 +471,25 @@ function resolveAction(state, index, events) {
     return;
   }
 
-  // "heavy" is a telegraphed overload. Task 10 turns the telegraph into a Read event;
-  // until then it resolves directly, and the wind-up leaves the attacker open — the
+  // "heavy" is a telegraphed overload. One swing in five (READ_CHANCE_ON_HEAVY) becomes a
+  // Read; the rest resolve directly below, and the wind-up leaves the attacker open — the
   // defender banks a surge charge for reading it.
   const isHeavy = action === 'heavy';
   const isSurge = action === 'surge';
 
-  // A heavy swing telegraphs: it opens a Read instead of resolving directly. The
-  // actionsTaken increment above already counted it, and skipClashRoll keeps
-  // finishAction from starting a random event that startClash would overwrite.
+  // A Read swing opens the event instead of resolving directly. The actionsTaken increment
+  // above already counted it, and skipClashRoll keeps finishAction from starting a random
+  // event that startClash would overwrite. The roll is drawn only for a heavy swing, so no
+  // other action's randomness moves.
   if (isHeavy && state.registry.events[read.id]) {
-    events.push({ t: state.clockMs, type: 'action', fighter: index, action: 'telegraph' });
-    finishAction(state, index, events, { skipClashRoll: true });
-    startClash(state, read.id, { heavyBy: index }, events);
-    return;
+    const readRoll = nextRandom(state.rng);
+    state.rng = readRoll.state;
+    if (readRoll.value < READ_CHANCE_ON_HEAVY) {
+      events.push({ t: state.clockMs, type: 'action', fighter: index, action: 'telegraph' });
+      finishAction(state, index, events, { skipClashRoll: true });
+      startClash(state, read.id, { heavyBy: index }, events);
+      return;
+    }
   }
 
   const actionMult = isHeavy ? ACTION_MULT.overload : isSurge ? ACTION_MULT.surge : ACTION_MULT.strike;

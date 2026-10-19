@@ -242,3 +242,59 @@ test('an element surge applies the attacker element status to the defender', () 
   const statuses = events.filter((e) => e.type === 'status' && e.applied);
   assert.ok(statuses.length > 0, 'no status was ever applied across a long defensive battle');
 });
+
+// A heavy swing used to open a Read every time, which made the Read nearly half of all clash
+// events and doubled the clashes in a battle. Now one swing in five telegraphs into a Read and
+// the other four land at once as a plain overload.
+const aggressiveBattle = (seed) => createBattle({
+  seed,
+  a: fighter({ posture: 'aggressive' }),
+  b: fighter({ asset_id: '2', posture: 'aggressive' }),
+});
+
+test('a heavy swing opens a Read about one time in five, and lands as an overload otherwise', () => {
+  let reads = 0;
+  let overloads = 0;
+  for (let i = 0; i < 300; i++) {
+    const { events } = runToEnd(aggressiveBattle(`heavy-${i}`));
+    reads += events.filter((e) => e.type === 'action' && e.action === 'telegraph').length;
+    overloads += events.filter((e) => e.type === 'action' && e.action === 'overload').length;
+  }
+  const swings = reads + overloads;
+  assert.ok(swings > 1000, `too few heavy swings to judge (${swings})`);
+  const share = reads / swings;
+  assert.ok(Math.abs(share - 0.2) < 0.04, `a Read followed ${(share * 100).toFixed(1)}% of ${swings} heavy swings`);
+});
+
+test('a heavy swing that is not a Read lands at once: the overload hit, and a surge charge for the defender', () => {
+  for (let i = 0; i < 50; i++) {
+    const { events } = runToEnd(aggressiveBattle(`plain-heavy-${i}`));
+    const swing = events.find((e) => e.type === 'action' && e.action === 'overload');
+    if (!swing) continue;
+    const defender = 1 - swing.fighter;
+    const sameMoment = events.filter((e) => e.t === swing.t);
+    assert.ok(sameMoment.some((e) => e.type === 'surge' && e.fighter === defender), 'the defender banks a charge for reading the wind-up');
+    if (!swing.evaded) {
+      assert.ok(sameMoment.some((e) => e.type === 'damage' && e.fighter === defender && e.source === 'action'), 'the overload lands');
+    }
+    assert.ok(!sameMoment.some((e) => e.type === 'clashStart' && e.id === 'read'), 'and no Read opens');
+    return;
+  }
+  assert.fail('no plain overload in fifty aggressive battles: every heavy swing still opens a Read');
+});
+
+test('a telegraph is always followed by its Read, naming the robot winding up', () => {
+  let telegraphs = 0;
+  for (let i = 0; i < 40; i++) {
+    const { events } = runToEnd(aggressiveBattle(`telegraph-${i}`));
+    events.forEach((event, index) => {
+      if (event.type !== 'action' || event.action !== 'telegraph') return;
+      telegraphs += 1;
+      const next = events.slice(index + 1).find((e) => e.type === 'clashStart');
+      assert.ok(next, 'a telegraph with no clash after it');
+      assert.equal(next.id, 'read');
+      assert.equal(next.public.heavyBy, event.fighter);
+    });
+  }
+  assert.ok(telegraphs > 0, 'no telegraph in forty aggressive battles');
+});

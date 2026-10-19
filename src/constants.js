@@ -4,17 +4,19 @@
  * and must not be changed without changing the spec.
  */
 
-/** Bump whenever a change alters simulation output; stamped on every battle record. */
 /**
  * Stamped on every recorded battle and compared when one is replayed, so a replay rebuilt by
  * a different engine can be flagged instead of quietly showing a fight that never happened.
- * That only works if this moves whenever behaviour moves: bump it in the same change as any
- * edit to the simulation, not afterwards.
  *
- * 1.1.0 — 2026-10-19, the stance triangle rebalanced and mutual guard now banks a Surge
- *         charge. Battles recorded at 1.0.0 will not replay faithfully, by design.
+ * Held at 1.0.0 through development (the owner's call, 2026-10-19): no real player has fought a
+ * battle yet, so there is no record a mismatch could protect, and the changes made so far — the
+ * stance rebalance, mutual guard banking a Surge charge, a Read on one heavy swing in five — all
+ * ship as 1.0.0. The cost is that a replay can no longer tell two engines apart, so the worker
+ * and the frontend must run the same engine commit; a battle rebuilt by a different one is
+ * refused rather than flagged. From the first real battle on, bump this in the same change as
+ * any edit to the simulation.
  */
-export const ENGINE_VERSION = '1.1.0';
+export const ENGINE_VERSION = '1.0.0';
 
 /** (spec) Damage pacing constant. ~10 landed hits settle a mirror match at any tier. */
 export const K = 0.2;
@@ -40,6 +42,18 @@ export const ACTION_JITTER = 0.15;
 
 /** (spec) Chance a clash event fires on an action resolution. ~5 per battle over ~20 actions. */
 export const CLASH_CHANCE = 0.2;
+
+/**
+ * Chance that a heavy swing's telegraph becomes a Read; otherwise the swing lands at once as a
+ * plain overload (1.6x, and the defender banks a Surge charge for reading the wind-up).
+ *
+ * Not (spec): §3.7 opens a Read on every telegraph. That path runs outside CLASH_CHANCE, so it
+ * stacked on top of the ~5 random events: measured over 5,200 balanced mirror matches, a Read
+ * was 46% of all clash events (4.2 a battle, 59% for aggressive robots) and a battle held ~9
+ * clashes rather than ~5. At one in five a Read is about as common as each other event (~0.8 a
+ * battle) and a battle holds ~6.
+ */
+export const READ_CHANCE_ON_HEAVY = 0.2;
 
 /** (spec) From 90s, all damage multiplies by 1.2 every further 15s, compounding. */
 export const SUDDEN_DEATH_START_MS = 90_000;

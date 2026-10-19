@@ -83,12 +83,20 @@ raw CI would produce fights that look fair on paper and are lopsided in practice
 CI remains correct as the whitepaper's public progression metric — it just is not a
 measure of who beats whom.
 
-## Known skew: the Read is not a balanced triangle
+## The Read: balance and frequency
 
-Measured expected net damage per Read against an opponent picking uniformly:
-**overload +0.47, strike +0.03, guard -0.50**. Overload is the strongest pick, so a
-player who always picks it gains a real edge. The multipliers are spec section 3.7's
-verbatim, so this is inherited rather than introduced, and reads are deliberately
-outside the +/-20% skill cap - but it is a live balance question for the spec owner,
-not a settled design. `src/ai.test.js` pins the payoff numbers so a change to the
-table is noticed.
+**Balance.** Spec section 3.7's verbatim table made overload the strongest pick (+0.47 net
+damage a Read against a uniformly random opponent, guard -0.50). On 2026-10-19 the triangle
+was rebalanced in `resolveStances` (`src/actions.js`): the three matchup margins are now
+0.50 / 0.49 / 0.30, so the optimal mix is strike 38% / guard 39% / overload 23% and no pick
+is the default answer. Reads stay deliberately outside the +/-20% skill cap.
+`src/ai.test.js` pins the payoff numbers so a change to the table is noticed.
+
+**Frequency.** A heavy swing telegraphs into a Read one time in five
+(`READ_CHANCE_ON_HEAVY`); the other four land as a plain overload. Section 3.7 opens a Read
+on every telegraph, and because that path sits outside `CLASH_CHANCE` it stacked on top of
+the ~5 random events: a Read was 46% of all clash events (59% for aggressive robots) and a
+battle held ~9 clashes. Now a battle holds ~0.8 Reads and ~6 clashes.
+
+`ENGINE_VERSION` is held at 1.0.0 through development, so the worker and the frontend must
+pin the same engine commit; see the reference doc, section 8 item 6.
