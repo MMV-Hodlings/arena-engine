@@ -5,7 +5,16 @@
  */
 
 /** Bump whenever a change alters simulation output; stamped on every battle record. */
-export const ENGINE_VERSION = '1.0.0';
+/**
+ * Stamped on every recorded battle and compared when one is replayed, so a replay rebuilt by
+ * a different engine can be flagged instead of quietly showing a fight that never happened.
+ * That only works if this moves whenever behaviour moves: bump it in the same change as any
+ * edit to the simulation, not afterwards.
+ *
+ * 1.1.0 — 2026-10-19, the stance triangle rebalanced and mutual guard now banks a Surge
+ *         charge. Battles recorded at 1.0.0 will not replay faithfully, by design.
+ */
+export const ENGINE_VERSION = '1.1.0';
 
 /** (spec) Damage pacing constant. ~10 landed hits settle a mirror match at any tier. */
 export const K = 0.2;

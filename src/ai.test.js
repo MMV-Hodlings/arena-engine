@@ -102,12 +102,12 @@ test('posture selection returns a real posture', () => {
 test('the stance payoff table is pinned, skew included', () => {
   // This replaces an earlier test that summed only the MOMENTUM score (1 / 0.5 / 0) over
   // the three opposing stances. That sum is 0.5 for ANY proper rock-paper-scissors cycle,
-  // so it could not fail for any payoff table — it proved nothing, and the ruling built on
+  // so it could not fail for any payoff table â€” it proved nothing, and the ruling built on
   // it ("the triangle has no dominant option") was wrong.
   //
   // The Read's real effect is the damage exchange, so that is what gets measured here:
   // expected net damage per Read against an opponent picking uniformly. The current table
-  // is NOT balanced — overload is the strongest pick and guard the weakest — and that skew
+  // is NOT balanced â€” overload is the strongest pick and guard the weakest â€” and that skew
   // is inherited verbatim from spec section 3.7. It is pinned rather than corrected,
   // because changing it is a spec decision, and pinned rather than ignored, because the
   // numbers below are what an exploitable Read looks like.
@@ -122,10 +122,34 @@ test('the stance payoff table is pinned, skew included', () => {
     payoff[mine] = net / stances.length;
   }
 
-  assert.ok(Math.abs(payoff.overload - 0.4667) < 0.01, `overload payoff moved: ${payoff.overload}`);
-  assert.ok(Math.abs(payoff.strike - 0.0333) < 0.01, `strike payoff moved: ${payoff.strike}`);
-  assert.ok(Math.abs(payoff.guard + 0.5) < 0.01, `guard payoff moved: ${payoff.guard}`);
+  // REBALANCED 2026-10-19, by the owner decision this test was waiting for. No stance is
+  // worth more than a rounding error against uniform play now; overload used to be +0.47.
+  for (const stance of stances) {
+    assert.ok(Math.abs(payoff[stance]) < 0.1, `${stance} is exploitable against random play: ${payoff[stance]}`);
+  }
 
-  const best = stances.reduce((x, y) => (payoff[x] >= payoff[y] ? x : y));
-  assert.equal(best, 'overload', 'the dominant stance changed - re-check the spec table');
+  // The guarantee that matters: optimal play is a real mix, not one button. A stance's share
+  // is proportional to the margin of the matchup it sits out of, so the margins set the meta.
+  const margin = (x, y) => {
+    const r = resolveStances(x, y);
+    return r.a.damageMult * r.b.takenMult - r.b.damageMult * r.a.takenMult;
+  };
+  const share = {
+    strike: margin('overload', 'guard'),
+    overload: margin('guard', 'strike'),
+    guard: margin('strike', 'overload'),
+  };
+  const total = share.strike + share.overload + share.guard;
+  for (const stance of stances) {
+    const pct = share[stance] / total;
+    assert.ok(pct > 0.15 && pct < 0.5, `${stance} is ${(pct * 100).toFixed(0)}% of optimal play - the triangle has skewed again`);
+  }
+
+  // Overload is the gamble, so it must carry the worst single outcome of the three.
+  const worst = (s) => Math.min(...stances.map((o) => margin(s, o)));
+  assert.equal(
+    stances.reduce((x, y) => (worst(x) <= worst(y) ? x : y)),
+    'overload',
+    'overload should carry the largest downside; it is the high-risk pick',
+  );
 });

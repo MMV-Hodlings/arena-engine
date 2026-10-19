@@ -14,6 +14,35 @@ import { MAX_TAPS_PER_SECOND } from './constants.js';
 
 const POSTURES = ['aggressive', 'balanced', 'defensive'];
 
+/**
+ * The stance triangle's optimal mix: strike 38%, guard 39%, overload 23%, which follows from
+ * the margins in resolveStances (a stance's share is proportional to the margin of the
+ * matchup it sits out of).
+ *
+ * This opponent used to pick uniformly at random, and that was a teaching bug rather than a
+ * difficulty setting: against uniform play the old table made overload worth +0.47 a Read, so
+ * practice rewarded the one habit staked play punishes. Competence now interpolates between
+ * uniform and optimal, so a weak opponent is still exploitable — which is the point of a low
+ * competence — but never exploitable by always pressing the same button.
+ */
+const STANCE_MIX = Object.freeze([
+  ['strike', 0.38],
+  ['guard', 0.39],
+  ['overload', 0.23],
+]);
+
+/** @param {number} competence 0..1 @param {number} roll 0..1 */
+function stanceFor(competence, roll) {
+  const c = clamp01(competence);
+  const uniform = 1 / STANCE_MIX.length;
+  let cumulative = 0;
+  for (const [stance, optimal] of STANCE_MIX) {
+    cumulative += uniform + c * (optimal - uniform);
+    if (roll < cumulative) return stance;
+  }
+  return STANCE_MIX[STANCE_MIX.length - 1][0];
+}
+
 /** Competence 0..1 to a tap rate, topping out just under the clamp. */
 function tapRateFor(competence) {
   return 2 + competence * (MAX_TAPS_PER_SECOND - 2);
@@ -122,8 +151,8 @@ export function planClashInputs(clash, player, options, rngState) {
     }
 
     case 'read': {
-      const roll = randomInt(rngState, 3);
-      const stance = ['strike', 'guard', 'overload'][roll.value];
+      const roll = nextRandom(rngState);
+      const stance = stanceFor(competence, roll.value);
       return {
         value: [{ player, payload: { stance }, atMs: clash.startedAt + 500 }],
         state: roll.state,

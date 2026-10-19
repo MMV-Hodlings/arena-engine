@@ -70,28 +70,44 @@ test('choosing an action is deterministic for a given state', () => {
   assert.equal(chooseAction(hashSeed('same'), ctx()).value, chooseAction(hashSeed('same'), ctx()).value);
 });
 
+/**
+ * What a matchup is worth to the winner, in units of base damage: what it lands minus what
+ * it eats. This, not the raw multipliers, is what sets how often each stance is worth
+ * picking, so it is what these tests assert.
+ */
+function netSwing(a, b) {
+  const r = resolveStances(a, b);
+  return r.a.damageMult * r.b.takenMult - r.b.damageMult * r.a.takenMult;
+}
+
 test('strike interrupts overload', () => {
   const result = resolveStances('strike', 'overload');
   assert.equal(result.outcome, 'a');
   assert.equal(result.a.damageMult, 1);
-  assert.ok(Math.abs(result.b.damageMult - 0.8) < 1e-9);
+  assert.ok(Math.abs(result.b.damageMult - 0.75) < 1e-9, 'the interrupted swing lands short');
+  assert.ok(Math.abs(result.b.takenMult - 1.25) < 1e-9, 'and leaves the overloader open');
+  assert.ok(Math.abs(netSwing('strike', 'overload') - 0.5) < 1e-9);
 });
 
-test('overload breaks guard for full damage', () => {
+test('overload beats a guard without erasing it', () => {
   const result = resolveStances('overload', 'guard');
   assert.equal(result.outcome, 'a');
   assert.equal(result.a.damageMult, 1.6);
-  assert.equal(result.b.damageMult, 0);
-  assert.equal(result.b.takenMult, 1, 'a broken guard gives no reduction');
+  assert.ok(Math.abs(result.b.takenMult - 0.4) < 1e-9, 'the guard blunts the swing, it is not broken');
+  assert.ok(Math.abs(result.b.damageMult - 0.15) < 1e-9, 'and chips back');
+  // The old table gave the guard 0 damage and no reduction, a swing of 1.60 — which made
+  // guard a trap rather than a stance. Keep this an edge, not an execution.
+  assert.ok(Math.abs(netSwing('overload', 'guard') - 0.49) < 1e-9);
 });
 
 test('guard parries strike and counters', () => {
   const result = resolveStances('guard', 'strike');
   assert.equal(result.outcome, 'a');
-  assert.ok(Math.abs(result.a.damageMult - 0.6) < 1e-9, 'the parrying robot counters');
+  assert.ok(Math.abs(result.a.damageMult - 0.55) < 1e-9, 'the parrying robot counters');
   assert.ok(Math.abs(result.b.takenMult - 1) < 1e-9);
-  assert.ok(Math.abs(result.a.takenMult - 0.5) < 1e-9, 'the parried strike is halved');
+  assert.ok(Math.abs(result.a.takenMult - 0.25) < 1e-9, 'the parried strike is mostly absorbed');
   assert.equal(result.b.damageMult, 1);
+  assert.ok(Math.abs(netSwing('guard', 'strike') - 0.3) < 1e-9);
 });
 
 test('mutual overload is devastating for both', () => {

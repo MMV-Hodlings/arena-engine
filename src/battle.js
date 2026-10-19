@@ -388,6 +388,21 @@ function runExchange(state, exchange, events) {
   for (const hit of hits) {
     if (hit.amount > 0) applyDamage(state, hit.target, hit.amount, 'exchange', events);
   }
+
+  // Spec section 3.7: two guards deal no damage and both bank a Surge charge. Specified from
+  // the start and never implemented, which left mutual guard as the one exchange where
+  // nothing whatsoever happened. That was tolerable while guard was 11% of optimal play and
+  // the mirror was 1% of Reads; after the 2026-10-19 rebalance guard is 39% and the mirror is
+  // 15%, so the dead exchange had to go. Granting the charge is the spec's own answer and
+  // makes a stand-off a decision — three of them arm an Element Surge — rather than a pause.
+  // Symmetric, so it does not move the stance equilibrium.
+  if (exchange.a === 'guard' && exchange.b === 'guard') {
+    for (const index of [0, 1]) {
+      const fighter = state.fighters[index];
+      fighter.surge += 1;
+      events.push({ t: state.clockMs, type: 'surge', fighter: index, charges: fighter.surge });
+    }
+  }
 }
 
 /**

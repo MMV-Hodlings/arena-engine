@@ -3,6 +3,7 @@ import assert from 'node:assert';
 import { createBattle, step } from './battle.js';
 import { toFighter } from './stats.js';
 import { MAX_TICK_STEP_MS, MOMENTUM_SHIFT } from './constants.js';
+import { read } from './events/read.js';
 
 const fighter = (over = {}) =>
   toFighter(
@@ -216,4 +217,37 @@ test('an event with no publicState still starts cleanly', () => {
   });
   const { events } = advanceUntil(battleWith(bare), (s) => s.phase === 'clash');
   assert.deepEqual(events.find((frame) => frame.type === 'clashStart').public, {});
+});
+
+test('two guards bank a Surge charge each instead of nothing happening', () => {
+  // Spec section 3.7 says mutual guard deals no damage and both gain a Surge charge. The
+  // charge was never implemented, which left this the one exchange where the battle simply
+  // paused. After the 2026-10-19 rebalance guard is ~39% of optimal play, so the mirror is
+  // ~15% of all Reads and the dead exchange mattered.
+  let { state } = advanceUntil(battleWith(read), (s) => s.phase === 'clash');
+  const hpBefore = state.fighters.map((f) => f.hp);
+
+  for (const player of ['a', 'b']) {
+    const result = step(state, {
+      type: 'clashInput', player, payload: { stance: 'guard' }, atMs: state.clockMs + 100,
+    });
+    state = result.state;
+  }
+
+  const after = advanceUntil(state, (s) => s.phase !== 'clash');
+  const surges = after.events.filter((e) => e.type === 'surge');
+
+  assert.equal(surges.length, 2, 'both robots bank a charge');
+  assert.deepEqual(after.state.fighters.map((f) => f.surge), [1, 1]);
+  assert.deepEqual(after.state.fighters.map((f) => f.hp), hpBefore, 'and neither takes damage');
+});
+
+test('a decided Read banks no Surge charge', () => {
+  // The charge is the reward for a stand-off specifically, not for any exchange.
+  let { state } = advanceUntil(battleWith(read), (s) => s.phase === 'clash');
+  state = step(state, { type: 'clashInput', player: 'a', payload: { stance: 'overload' }, atMs: state.clockMs + 100 }).state;
+  state = step(state, { type: 'clashInput', player: 'b', payload: { stance: 'guard' }, atMs: state.clockMs + 100 }).state;
+
+  const after = advanceUntil(state, (s) => s.phase !== 'clash');
+  assert.equal(after.events.filter((e) => e.type === 'surge').length, 0);
 });
