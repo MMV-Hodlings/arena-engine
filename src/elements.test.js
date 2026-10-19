@@ -55,7 +55,8 @@ test('each element maps to its status effect', () => {
   assert.deepEqual(statusForElement('Fire'), { id: 'burn', actions: 3 });
   assert.deepEqual(statusForElement('Ice'), { id: 'freeze', actions: 1 });
   assert.deepEqual(statusForElement('Lightning'), { id: 'shock', actions: 2 });
-  assert.deepEqual(statusForElement('Air'), { id: 'gust', actions: 1 });
+  // Gust guards the surging robot itself, and outlasts the tick at the end of the surge.
+  assert.deepEqual(statusForElement('Air'), { id: 'gust', actions: 2, self: true });
   assert.deepEqual(statusForElement('Earth'), { id: 'quake', actions: 1 });
   assert.deepEqual(statusForElement('Water'), { id: 'drench', actions: 2 });
   assert.equal(statusForElement('Neutral'), null);

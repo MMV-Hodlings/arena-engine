@@ -12,7 +12,7 @@ import { planClashInputs } from './ai.js';
 import { hashSeed } from './rng.js';
 import { CLASH_WEIGHTS } from './events/index.js';
 import { OPTIMAL_STANCE_MIX } from './actions.js';
-import { MAX_TICK_STEP_MS, ACTION_CADENCE_MS, MIN_BLOW_GAP_MS, CLASH_CHANCE_RAMP } from './constants.js';
+import { MAX_TICK_STEP_MS, ACTION_CADENCE_MS, MIN_BLOW_GAP_MS, CLASH_CHANCE_RAMP, OMEN_MS } from './constants.js';
 
 const roster = JSON.parse(readFileSync(new URL('../harness/roster.sample.json', import.meta.url), 'utf8'));
 const robot = (i, posture) => ({ ...toFighter(roster[i % roster.length]), posture });
@@ -49,6 +49,8 @@ test('the rhythm is the one the design fixed', () => {
   assert.equal(ACTION_CADENCE_MS, 6000);
   assert.equal(MIN_BLOW_GAP_MS, 2000);
   assert.deepEqual([...CLASH_CHANCE_RAMP], [0.3, 0.6, 1]);
+  // The owner's call, 2026-10-19: a 3s hint, then a 5s briefing before a timing event's input opens.
+  assert.equal(OMEN_MS, 3000);
 });
 
 test('a heavy swing settles at once as an exchange, and never telegraphs', () => {

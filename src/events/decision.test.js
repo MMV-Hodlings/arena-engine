@@ -13,8 +13,8 @@ test('the Read and Power Routing give fifteen seconds and no briefing', () => {
   }
 });
 
-test('the timing events keep their windows and are briefed for two seconds', () => {
-  assert.equal(BRIEFING_MS, 2000);
+test('the timing events keep their windows and are briefed for five seconds', () => {
+  assert.equal(BRIEFING_MS, 5000);
   const windows = { reflexStrike: 3000, targetingLock: 4000, sequenceLock: 5000, tugOfWar: 5000, overloadSurge: 4000 };
   for (const [id, ms] of Object.entries(windows)) {
     assert.equal(CLASH_EVENTS[id].durationMs, ms, id);

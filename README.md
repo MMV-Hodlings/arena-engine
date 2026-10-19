@@ -42,7 +42,7 @@ Player input during a clash event:
 
 ## Tests
 
-    npm test          # node --test, colocated *.test.js — 277 tests
+    npm test          # node --test, colocated *.test.js — 278 tests
     npm run balance   # pairwise simulation over the roster
     npm run pacing    # events, spacing, battle length and posture balance (battle pacing design)
 
@@ -111,8 +111,8 @@ in `src/constants.js` and `src/battle.js`:
 - **Rhythm.** Each robot acts about every six seconds (`ACTION_CADENCE_MS`), and two actions
   are never closer than two (`MIN_BLOW_GAP_MS`).
 - **Hints and briefings.** A drawn event first emits an `omen` and holds the stage for
-  `OMEN_MS` (5s) with the fight paused. Timing events then announce themselves `BRIEFING_MS`
-  (2s) before input opens: `clashStart` carries `announcedAt`, `startedAt` and `endsAt`, and
+  `OMEN_MS` (3s) with the fight paused. Timing events then announce themselves `BRIEFING_MS`
+  (5s) before input opens: `clashStart` carries `announcedAt`, `startedAt` and `endsAt`, and
   event modules keep measuring from `startedAt`.
 - **Decisions.** The Read and Power Routing give `DECISION_WINDOW_MS` (15s) and close the
   moment both players have committed (`settled`). A pick is binding, so the early close leaks

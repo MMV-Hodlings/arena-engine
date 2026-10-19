@@ -16,6 +16,7 @@
 import { hashSeed, nextRandom } from './rng.js';
 import { deriveCombat, combatIndex } from './stats.js';
 import { rollDamage } from './damage.js';
+import { statusForElement } from './elements.js';
 import { hitMoments } from './moments.js';
 import { MOMENTUM_START } from './momentum.js';
 import {
@@ -614,19 +615,24 @@ function resolveAction(state, index, events) {
   }
 
   if (isSurge) {
-    const result = applyElementStatus(defender.statuses, attacker.element);
-    defender.statuses = result.statuses;
+    // A status afflicts the target, except one marked `self` (Air's Gust), which guards the
+    // surging robot instead.
+    const onSelf = !!statusForElement(attacker.element)?.self;
+    const holderIndex = onSelf ? index : 1 - index;
+    const holder = state.fighters[holderIndex];
+    const result = applyElementStatus(holder.statuses, attacker.element);
+    holder.statuses = result.statuses;
     if (result.applied) {
       events.push({
         t: state.clockMs,
         type: 'status',
-        fighter: 1 - index,
+        fighter: holderIndex,
         id: result.applied.id,
         applied: true,
       });
       if (result.applied.id === 'drench') {
-        defender.surge = Math.max(0, defender.surge - DRENCH_CHARGE_LOSS);
-        events.push({ t: state.clockMs, type: 'surge', fighter: 1 - index, charges: defender.surge });
+        holder.surge = Math.max(0, holder.surge - DRENCH_CHARGE_LOSS);
+        events.push({ t: state.clockMs, type: 'surge', fighter: holderIndex, charges: holder.surge });
       }
     }
   }

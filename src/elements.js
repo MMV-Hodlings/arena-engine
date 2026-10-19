@@ -26,7 +26,10 @@ const STATUS_BY_ELEMENT = {
   Fire: { id: 'burn', actions: 3 },
   Ice: { id: 'freeze', actions: 1 },
   Lightning: { id: 'shock', actions: 2 },
-  Air: { id: 'gust', actions: 1 },
+  // Gust is the one status that guards the surging robot rather than afflicting its target
+  // (owner's call, 2026-10-19). Two actions, because the surge's own action ticks it once: it
+  // then lasts until the Air robot acts again, or until an attack on it uses it up.
+  Air: { id: 'gust', actions: 2, self: true },
   Earth: { id: 'quake', actions: 1 },
   Water: { id: 'drench', actions: 2 },
 };
@@ -59,7 +62,8 @@ export function elementMultiplier(mine, theirs) {
 
 /**
  * @param {unknown} element
- * @returns {{id: string, actions: number} | null} null for Neutral and anything unknown
+ * @returns {{id: string, actions: number, self?: boolean} | null} null for Neutral and anything
+ *   unknown; `self` marks a status that lands on the surging robot instead of its target
  */
 export function statusForElement(element) {
   const canonical = normalizeElement(element);

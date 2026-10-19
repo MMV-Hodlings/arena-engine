@@ -64,18 +64,19 @@ export const CLASH_CHANCE_RAMP = Object.freeze([0.3, 0.6, 1]);
 
 /**
  * (pacing design) How long a hint line holds the stage before its event opens. The fight is
- * paused for it: no action resolves between the hint and the event's close. 5s is the owner's
- * call at review, up from a proposed 2.5s.
+ * paused for it: no action resolves between the hint and the event's close. 3s, the owner's call
+ * on 2026-10-19 (it was 5s), with the time moved into the briefing below, where the player is
+ * told what to do.
  */
-export const OMEN_MS = 5000;
+export const OMEN_MS = 3000;
 
 /**
  * (pacing design) The briefing before input opens on a timing event (Reflex Strike, Targeting
  * Lock, Sequence Lock, Tug of War, Overload Surge): the event's name, its instruction and its
  * keys. Their windows are the skill being tested, so they keep their lengths and gain this
- * beat in front instead.
+ * beat in front instead. 5s, the owner's call on 2026-10-19 (it was 2s).
  */
-export const BRIEFING_MS = 2000;
+export const BRIEFING_MS = 5000;
 
 /**
  * (pacing design) The window for the two decision events, the Read and Power Routing. Either

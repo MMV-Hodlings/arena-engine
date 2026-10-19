@@ -285,3 +285,32 @@ test('a blow carries what it dealt and its moments', () => {
   const first = events.find((e) => e.type === 'damage');
   if (first && (first.source === 'action' || first.source === 'exchange')) assert.equal(firstBloods, 1);
 });
+
+// Air's Gust is a guard for the surging robot (owner's call, 2026-10-19): it used to land on the
+// target, giving the opponent a chance to dodge the Air robot's own next hit. It now wraps the Air
+// robot until that robot acts again, and must still be there for the opponent's attacks in between.
+test('an Air surge wraps the surging robot in Gust, not its target, until it acts again', () => {
+  let gusts = 0;
+  let evades = 0;
+  for (let i = 0; i < 80; i++) {
+    const { events } = runToEnd(
+      createBattle({
+        seed: `gust-${i}`,
+        a: fighter({ element: 'Air', posture: 'defensive', attack: 2, defense: 5, hp: 5 }),
+        b: fighter({ asset_id: '2', element: 'Water', posture: 'defensive', attack: 2, defense: 5, hp: 5 }),
+      }),
+    );
+    for (const e of events) {
+      if (e.type === 'status' && e.id === 'gust' && e.applied) {
+        gusts += 1;
+        assert.equal(e.fighter, 0, 'Gust landed on the target instead of the Air robot');
+      }
+      if (e.type === 'action' && e.evaded) {
+        evades += 1;
+        assert.equal(e.fighter, 1, 'only an attack on the Gusted Air robot can be dodged');
+      }
+    }
+  }
+  assert.ok(gusts > 10, `only ${gusts} Air surges to judge`);
+  assert.ok(evades > 0, 'no Gust ever made the Air robot dodge: it expired before it could');
+});
