@@ -42,8 +42,9 @@ Player input during a clash event:
 
 ## Tests
 
-    npm test          # node --test, colocated *.test.js — 191 tests
+    npm test          # node --test, colocated *.test.js — 271 tests
     npm run balance   # pairwise simulation over the roster
+    npm run pacing    # events, spacing, battle length and posture balance (battle pacing design)
 
 ## Measured balance (2026-10-15, `npm run balance -- --seeds 60`, 4,680 battles)
 
@@ -83,20 +84,49 @@ raw CI would produce fights that look fair on paper and are lopsided in practice
 CI remains correct as the whitepaper's public progression metric — it just is not a
 measure of who beats whom.
 
-## The Read: balance and frequency
+## The Read: balance
 
-**Balance.** Spec section 3.7's verbatim table made overload the strongest pick (+0.47 net
-damage a Read against a uniformly random opponent, guard -0.50). On 2026-10-19 the triangle
-was rebalanced in `resolveStances` (`src/actions.js`): the three matchup margins are now
-0.50 / 0.49 / 0.30, so the optimal mix is strike 38% / guard 39% / overload 23% and no pick
+Spec section 3.7's verbatim table made overload the strongest pick (+0.47 net damage a Read
+against a uniformly random opponent, guard -0.50). On 2026-10-19 the triangle was rebalanced
+in `resolveStances` (`src/actions.js`): the three matchup margins are now 0.50 / 0.49 / 0.30,
+so the optimal mix (`OPTIMAL_STANCE_MIX`) is strike 38% / guard 39% / overload 23% and no pick
 is the default answer. Reads stay deliberately outside the +/-20% skill cap.
 `src/ai.test.js` pins the payoff numbers so a change to the table is noticed.
 
-**Frequency.** A heavy swing telegraphs into a Read one time in five
-(`READ_CHANCE_ON_HEAVY`); the other four land as a plain overload. Section 3.7 opens a Read
-on every telegraph, and because that path sits outside `CLASH_CHANCE` it stacked on top of
-the ~5 random events: a Read was 46% of all clash events (59% for aggressive robots) and a
-battle held ~9 clashes. Now a battle holds ~0.8 Reads and ~6 clashes.
+## Pacing and events
+
+The battle pacing design (`docs/superpowers/specs/2026-10-19-cyber-authority-arena-battle-pacing-design.md`),
+in `src/constants.js` and `src/battle.js`:
+
+- **The event mix.** Every event is drawn at the same weight except Power Routing at three
+  quarters (`CLASH_WEIGHTS`). The Read is drawn like the rest; the robot whose action drew it
+  is the one winding up.
+- **How often.** The chance rises with each action since the last event closed:
+  0.3, 0.6, then certain (`CLASH_CHANCE_RAMP`). First blood and the first drop below a quarter
+  HP still force one. About nine events a balanced battle, never more than three actions apart.
+- **Heavy swings** settle at once through the stance triangle: the swinger overloads and the
+  target answers from `OPTIMAL_STANCE_MIX`, so a heavy swing is a gamble, never free damage.
+  (Opening a Read on every one made Reads half of all events; letting most land as a plain 1.6x
+  hit had aggressive robots beating defensive ones 87% of the time.)
+- **Rhythm.** Each robot acts about every six seconds (`ACTION_CADENCE_MS`), and two actions
+  are never closer than two (`MIN_BLOW_GAP_MS`).
+- **Hints and briefings.** A drawn event first emits an `omen` and holds the stage for
+  `OMEN_MS` (5s) with the fight paused. Timing events then announce themselves `BRIEFING_MS`
+  (2s) before input opens: `clashStart` carries `announcedAt`, `startedAt` and `endsAt`, and
+  event modules keep measuring from `startedAt`.
+- **Decisions.** The Read and Power Routing give `DECISION_WINDOW_MS` (15s) and close the
+  moment both players have committed (`settled`). A pick is binding, so the early close leaks
+  nothing.
+- **No sudden death.** Damage no longer grows with time. `MAX_BATTLE_MS` (15 minutes) is a
+  hidden safety net that no measured battle reaches.
+- **Narration.** One line per blow: blows and exchanges carry what they dealt and their
+  `moments` (`src/moments.js`), and their damage events narrate nothing. All copy lives in
+  `src/narration-lines.js`.
+
+`npm run pacing -- --seeds 200` (2026-10-19): balanced mirrors hold 8.8 events (Read 1.27,
+Reflex Strike 1.33, Power Routing 0.99); aggressive beats balanced 49.3%, aggressive beats
+defensive 58.5%, balanced beats defensive 61.1%. Battle length there undercounts real play,
+because the AI commits a decision half a second in.
 
 `ENGINE_VERSION` is held at 1.0.0 through development, so the worker and the frontend must
 pin the same engine commit; see the reference doc, section 8 item 6.

@@ -6,6 +6,7 @@
   "main": "src/index.js",
   "scripts": {
     "test": "node --test",
-    "balance": "node harness/balance.js"
+    "balance": "node harness/balance.js",
+    "pacing": "node harness/pacing.js"
   }
 }

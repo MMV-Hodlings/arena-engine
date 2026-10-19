@@ -147,3 +147,14 @@ replay verification could diverge in the last ulp.
 Final: minor (deferred): #20 a malformed element silently costs its owner 5% with no
 diagnostic, while every other field is validated.
 Final: minor (deferred): #21 Gust fired once in 400 battles as tuned - effectively inert.
+
+## 2026-10-19 — Battle pacing (plan docs/superpowers/plans/2026-10-19-cyber-authority-arena-battle-pacing.md)
+
+Executed natively; the ledger is .superpowers/sdd/2026-10-19-cyber-authority-arena-battle-pacing/progress.md
+in the parent folder. Engine commits: 5cbf04e (the earlier one-in-five Read and the 1.0.0 hold,
+committed on their own), efedf11 (event mix, ramp, heavy swings, rhythm), 6dee257 (omens,
+briefings, decision windows, no sudden death), 232bbd0 (one line per blow, moments, narration),
+then the pacing harness and docs. Suite 236 → 271. The one-in-five rule is gone: it let four
+heavy swings in five land as an unanswerable 1.6x hit, and aggressive beat defensive 87% of the
+time; heavy swings now settle through the stance triangle and the Read is drawn like any other
+event. Measured with `npm run pacing -- --seeds 200`: see the README's "Pacing and events".
