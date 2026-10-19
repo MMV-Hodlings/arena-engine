@@ -250,3 +250,15 @@ test('a big moment in an exchange or a surge is told too, beside its contest', (
   const plainSurge = narrate({ t: 9, type: 'action', fighter: 0, action: 'surge', amount: 120, moments: [] }, sized);
   assert.ok(!firstBlood.some((sentence) => plainSurge.text.includes(sentence)), plainSurge.text);
 });
+
+// Deferred minor #11: a strike into a wind-up only blunts the heavy blow (0.75x), and the numbers
+// appended to the line show it landed, so no line may claim it never fell.
+test('a strike into a wind-up blunts the heavy blow, and no line says it never landed', () => {
+  const sets = [LINES.heavy.strike, LINES.read['strike-overload'], LINES.read['overload-strike']];
+  for (const set of sets) {
+    for (const template of set) {
+      const text = template(sized[0], sized[1]);
+      assert.ok(!/before the (heavy )?blow (can|could) (fall|land)/i.test(text), text);
+    }
+  }
+});

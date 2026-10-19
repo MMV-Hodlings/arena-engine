@@ -36,6 +36,13 @@ const ACTION_ANIMATION = {
   guard: 'guard',
 };
 
+/** How a robot shows the stance it took in an exchange. */
+const STANCE_ANIMATION = {
+  strike: 'strike',
+  guard: 'guard',
+  overload: 'heavy',
+};
+
 const sideOf = (index) => (index === 0 ? 'a' : index === 1 ? 'b' : null);
 
 const figure = (index, animation) => ({ kind: 'figure', side: sideOf(index), animation });
@@ -82,13 +89,29 @@ export function choreograph(event, fighters = []) {
       const cues = [];
       // Status ticks are constant and are not blows: they get a number, nothing else.
       if (event.source !== 'status') {
-        cues.push(figure(index, fraction !== null && fraction >= STAGGER_FRACTION ? 'stagger' : 'hurt'));
+        // An exchange has just set both robots' stances; a recoil here would overwrite the one
+        // the player needs to see to read who won it. The hit still flashes, counts and shakes.
+        if (event.source !== 'exchange') {
+          cues.push(figure(index, fraction !== null && fraction >= STAGGER_FRACTION ? 'stagger' : 'hurt'));
+        }
         cues.push({ kind: 'fx', effect: 'impact', side, element, amount });
         if (fraction !== null && fraction >= SHAKE_FLOOR) {
           cues.push({ kind: 'shake', strength: fraction >= HEAVY_SHAKE_FRACTION ? 2 : 1 });
         }
       }
       cues.push({ kind: 'fx', effect: 'damageNumber', side, element, amount: Math.round(amount) });
+      return cues;
+    }
+
+    // A stance exchange: each robot shows the stance it took. A heavy swing's swinger already
+    // moved on its own `heavy` action, so only the robot answering it is new.
+    case 'exchange': {
+      const cues = [];
+      for (const index of [0, 1]) {
+        if (event.source === 'heavy' && index === event.by) continue;
+        const animation = STANCE_ANIMATION[event.stances?.[index === 0 ? 'a' : 'b']];
+        if (animation) cues.push(figure(index, animation));
+      }
       return cues;
     }
 

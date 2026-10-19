@@ -170,3 +170,25 @@ test('damage against a robot with no known maxHp still flashes, just without a s
   assert.equal(find(cues, 'shake'), null, 'no maxHp means no fraction to scale by');
   assert.equal(find(cues, 'fx').effect, 'impact');
 });
+
+// ── Deferred minor #5: an exchange's stances show on stage ──
+
+test("a heavy swing's answer shows on the robot answering", () => {
+  const cues = choreograph({ type: 'exchange', source: 'heavy', by: 0, stances: { a: 'overload', b: 'guard' }, outcome: 'a', hits: [] }, fighters);
+  // The swinger already moved on its own `heavy` action; only the answer is new.
+  assert.deepEqual(figureCues(cues).map((cue) => [cue.side, cue.animation]), [['b', 'guard']]);
+  const struck = choreograph({ type: 'exchange', source: 'heavy', by: 1, stances: { a: 'strike', b: 'overload' }, outcome: 'a', hits: [] }, fighters);
+  assert.deepEqual(figureCues(struck).map((cue) => [cue.side, cue.animation]), [['a', 'strike']]);
+});
+
+test('a Read shows both stances, an overload as a heavy swing', () => {
+  const cues = choreograph({ type: 'exchange', source: 'read', by: 0, stances: { a: 'strike', b: 'overload' }, outcome: 'a', hits: [] }, fighters);
+  assert.deepEqual(figureCues(cues).map((cue) => [cue.side, cue.animation]), [['a', 'strike'], ['b', 'heavy']]);
+});
+
+test("an exchange's damage flashes and counts but leaves the stances standing", () => {
+  const cues = choreograph({ type: 'damage', fighter: 1, amount: 120, hpAfter: 480, source: 'exchange' }, fighters);
+  assert.equal(figureCues(cues).length, 0, 'a recoil would overwrite the stance the exchange just showed');
+  assert.ok(cues.some((cue) => cue.kind === 'fx' && cue.effect === 'impact'));
+  assert.ok(cues.some((cue) => cue.kind === 'fx' && cue.effect === 'damageNumber' && cue.amount === 120));
+});

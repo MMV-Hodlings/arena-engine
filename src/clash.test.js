@@ -338,3 +338,16 @@ test('a commit at the last moment of the window closes it once', () => {
   assert.equal(ends.length, 1);
   assert.equal(ends[0].t, opened + 15_000);
 });
+
+// Deferred minor #9: the push-back is the whole pause, the hint included. Asserted directly,
+// because MIN_BLOW_GAP_MS alone would hide a push measured from the window's opening instead.
+test('both gauges are pushed back by the whole pause, from the hint to the close', () => {
+  let { state } = advanceUntil(battleWith(scripted({ a: 0.5, b: 0.5 })), (s) => s.phase === 'omen');
+  const before = state.fighters.map((f) => f.nextActionAt);
+  const omenAt = state.omen.startedAt;
+  const { state: after, events } = advanceUntil(state, (s) => s.phase === 'fighting');
+  const end = events.find((e) => e.type === 'clashEnd');
+  assert.ok(end, 'the event never closed');
+  assert.ok(end.t - omenAt >= OMEN_MS, 'the pause should include the hint');
+  assert.deepEqual(after.fighters.map((f) => f.nextActionAt), before.map((at) => at + (end.t - omenAt)));
+});

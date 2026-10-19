@@ -202,7 +202,7 @@ export const LINES = Object.freeze({
   heavy: {
     strike: [
       (s, a) => `${a.name} reads the wind-up and steps inside ${s.name}'s swing.`,
-      (s, a) => `${s.name} winds up, and ${a.name} hits it before the blow can fall.`,
+      (s, a) => `${s.name} winds up, and ${a.name} hits it mid-swing, blunting the blow.`,
       (s, a) => `${a.name} catches ${s.name} mid-swing, wide open.`,
     ],
     guard: [
@@ -228,7 +228,7 @@ export const LINES = Object.freeze({
       (a, b) => `${a.name} strikes into ${b.name}'s guard and pays for it.`,
     ],
     'strike-overload': [
-      (a, b) => `${a.name} hits ${b.name} before the heavy blow can fall.`,
+      (a, b) => `${a.name} catches ${b.name} mid-wind-up and blunts the heavy blow.`,
       (a, b) => `${b.name} winds up, and ${a.name} punishes the opening.`,
     ],
     'guard-strike': [
@@ -244,7 +244,7 @@ export const LINES = Object.freeze({
       (a, b) => `${a.name} braces, and ${b.name}'s heavy blow caves the guard in.`,
     ],
     'overload-strike': [
-      (a, b) => `${b.name} hits ${a.name} before the heavy blow can fall.`,
+      (a, b) => `${b.name} catches ${a.name} mid-wind-up and blunts the heavy blow.`,
       (a, b) => `${a.name} winds up, and ${b.name} punishes the opening.`,
     ],
     'overload-guard': [
