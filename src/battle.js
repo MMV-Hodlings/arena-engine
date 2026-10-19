@@ -16,6 +16,7 @@
 import { hashSeed, nextRandom } from './rng.js';
 import { deriveCombat, combatIndex } from './stats.js';
 import { rollDamage } from './damage.js';
+import { hitMoments } from './moments.js';
 import { MOMENTUM_START } from './momentum.js';
 import {
   applyElementStatus, tickStatuses, hasStatus, consumeStatus,
@@ -59,6 +60,8 @@ export function createBattle({ seed, a, b, clashRegistry }) {
     pendingBuff: null,
     nextActionAt: Infinity,
     actionsTaken: 0,
+    // Damaging hits in a row without taking damage in between, for narration's streak moment.
+    streak: 0,
   });
 
   return {
@@ -74,6 +77,8 @@ export function createBattle({ seed, a, b, clashRegistry }) {
     // Actions by either robot since the last clash event closed: what the rising chance reads.
     actionsSinceClash: 0,
     firstBloodDone: false,
+    // Whether any damage at all has landed yet: the first hit that deals some is first blood.
+    blooded: false,
     reelingClashDone: false,
     omen: null,
     clash: null,
@@ -418,6 +423,24 @@ function runExchange(state, exchange, events, { source, by }) {
     state.rng = roll.state;
     hits.push({ target: 1 - index, amount: roll.value });
   }
+  // Each hit's part in the story, worked out before any of them lands: what it dealt and the
+  // moments it made. When both robots hit each other, neither is on a run.
+  const mutual = hits.length === 2 && hits.every((hit) => hit.amount > 0);
+  let blooded = state.blooded;
+  const told = hits.map((hit) => {
+    const target = state.fighters[hit.target];
+    const attacker = state.fighters[1 - hit.target];
+    const dealt = Math.min(hit.amount, target.hp);
+    const streak = mutual || !(dealt > 0) ? 0 : (attacker.streak ?? 0) + 1;
+    const moments = hitMoments({
+      target,
+      attacker: { hp: attacker.hp, maxHp: attacker.maxHp, streak },
+      dealt,
+      firstBlood: !blooded,
+    });
+    if (dealt > 0) blooded = true;
+    return { fighter: hit.target, amount: dealt, moments };
+  });
   events.push({
     t: state.clockMs,
     type: 'exchange',
@@ -425,10 +448,16 @@ function runExchange(state, exchange, events, { source, by }) {
     by,
     stances: exchange,
     outcome: resolved.outcome,
+    hits: told,
   });
   // Simultaneous: both hits land even if one is lethal.
   for (const hit of hits) {
     if (hit.amount > 0) applyDamage(state, hit.target, hit.amount, 'exchange', events);
+  }
+  if (!mutual) {
+    for (const hit of told) {
+      if (hit.amount > 0) state.fighters[1 - hit.fighter].streak = (state.fighters[1 - hit.fighter].streak ?? 0) + 1;
+    }
   }
 
   // Spec section 3.7: two guards deal no damage and both bank a Surge charge. Specified from
@@ -557,17 +586,31 @@ function resolveAction(state, index, events) {
     if (evaded) damage = 0;
   }
 
+  // One line per blow: the blow carries what it dealt and the moments it made, so narration
+  // never has to pair it with the damage event that follows.
+  const dealt = Math.min(damage, defender.hp);
+  const streak = dealt > 0 ? (attacker.streak ?? 0) + 1 : (attacker.streak ?? 0);
+  const moments = hitMoments({
+    target: defender,
+    attacker: { hp: attacker.hp, maxHp: attacker.maxHp, streak },
+    dealt,
+    firstBlood: !state.blooded,
+  });
+
   events.push({
     t: state.clockMs,
     type: 'action',
     fighter: index,
     action,
     evaded,
+    amount: dealt,
+    moments,
   });
 
   if (damage > 0) {
     applyDamage(state, 1 - index, damage, 'action', events);
     if (state.phase === 'ended') return;
+    attacker.streak = streak;
   }
 
   if (isSurge) {
@@ -621,6 +664,8 @@ function applyDamage(state, index, amount, source, events) {
   const victim = state.fighters[index];
   const dealt = Math.min(amount, victim.hp);
   victim.hp = Math.max(0, victim.hp - amount);
+  victim.streak = 0;
+  if (dealt > 0) state.blooded = true;
 
   events.push({
     t: state.clockMs,

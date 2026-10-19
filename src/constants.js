@@ -111,3 +111,18 @@ export const INTRO_MS = 3000;
 
 /** A hit at or above this fraction of max HP grants the victim a surge charge. */
 export const BIG_HIT_FRACTION = 0.15;
+
+/**
+ * (pacing design) Narration's sense of size and occasion. A hit under GRAZE_FRACTION of the
+ * target's max HP reads as a graze, one at BIG_HIT_FRACTION or more as crushing, anything between
+ * as solid. A winner above ROUT_FRACTION of its HP won a rout, one under CLOSE_FRACTION a close
+ * finish. HALF_HP_FRACTION and LOW_HP_FRACTION are the lines a hit can take a robot below.
+ * A comeback is a crushing hit from a robot at least COMEBACK_GAP behind on HP share; a streak is
+ * the STREAK_LENGTH-th damaging hit in a row without taking damage in between.
+ */
+export const GRAZE_FRACTION = 0.06;
+export const ROUT_FRACTION = 0.6;
+export const CLOSE_FRACTION = 0.15;
+export const HALF_HP_FRACTION = 0.5;
+export const COMEBACK_GAP = 0.3;
+export const STREAK_LENGTH = 3;

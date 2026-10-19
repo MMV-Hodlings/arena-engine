@@ -28,10 +28,26 @@ test('an overload is a bigger swing and shakes the arena', () => {
   assert.equal(find(cues, 'shake').strength, 2);
 });
 
-test('a telegraph holds rather than swinging, because it is the Read cue', () => {
-  const cues = choreograph({ type: 'action', fighter: 1, action: 'telegraph' }, fighters);
-  assert.equal(figureCues(cues)[0].animation, 'telegraph');
+test("the Read's omen is the wind-up on the robot winding up", () => {
+  const cues = choreograph({ type: 'omen', id: 'read', fighter: 1 }, fighters);
+  assert.deepEqual(figureCues(cues)[0], { kind: 'figure', side: 'b', animation: 'telegraph' });
   assert.equal(find(cues, 'shake'), null, 'nothing has landed yet');
+});
+
+test('any other omen glows the robot in its element', () => {
+  const cues = choreograph({ type: 'omen', id: 'reflexStrike', fighter: 0 }, fighters);
+  const glow = find(cues, 'fx');
+  assert.equal(glow.effect, 'aura');
+  assert.equal(glow.side, 'a');
+  assert.equal(glow.element, 'Fire');
+  assert.equal(figureCues(cues).length, 0);
+});
+
+test('a heavy swing is a big swing and shakes the arena', () => {
+  const cues = choreograph({ type: 'action', fighter: 0, action: 'heavy' }, fighters);
+  assert.equal(figureCues(cues)[0].animation, 'heavy');
+  assert.equal(find(cues, 'shake').strength, 2);
+  assert.ok(cues.some((cue) => cue.kind === 'fx' && cue.effect === 'shockwave'));
 });
 
 test('a guard braces and does not attack', () => {

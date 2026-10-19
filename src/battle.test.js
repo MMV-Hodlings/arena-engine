@@ -263,3 +263,25 @@ test('an element surge applies the attacker element status to the defender', () 
   const statuses = events.filter((e) => e.type === 'status' && e.applied);
   assert.ok(statuses.length > 0, 'no status was ever applied across a long defensive battle');
 });
+
+test('a blow carries what it dealt and its moments', () => {
+  const { events } = runToEnd(createBattle({ seed: 'moments', a: fighter(), b: fighter({ asset_id: '2' }) }));
+  let firstBloods = 0;
+  events.forEach((e, k) => {
+    if (e.type === 'action' && (e.action === 'strike' || e.action === 'surge')) {
+      assert.equal(typeof e.amount, 'number', `action at ${e.t} has no amount`);
+      assert.ok(Array.isArray(e.moments), `action at ${e.t} has no moments`);
+      const dealt = events.slice(k + 1).find((x) => x.type === 'damage' && x.t === e.t && x.source === 'action');
+      if (e.amount > 0) assert.ok(dealt && Math.abs(dealt.amount - e.amount) < 1e-9, `action at ${e.t} disagrees with its damage`);
+      else assert.ok(!dealt, `action at ${e.t} dealt nothing but a damage event followed`);
+      firstBloods += e.moments.filter((m) => m === 'firstBlood').length;
+    }
+    if (e.type === 'exchange') {
+      assert.ok(Array.isArray(e.hits), `exchange at ${e.t} has no hits`);
+      for (const hit of e.hits) firstBloods += hit.moments.filter((m) => m === 'firstBlood').length;
+    }
+  });
+  assert.ok(firstBloods <= 1, `${firstBloods} hits claimed first blood`);
+  const first = events.find((e) => e.type === 'damage');
+  if (first && (first.source === 'action' || first.source === 'exchange')) assert.equal(firstBloods, 1);
+});

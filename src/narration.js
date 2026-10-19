@@ -1,75 +1,88 @@
 /**
- * Semantic events to prose (spec section 5.5).
+ * Semantic events to prose (spec section 5.5, as amended by the battle pacing design).
  *
- * The phrase is chosen by hashing the event itself, not by drawing from the battle's
- * random stream. That means both clients render identical text from identical events with
- * nothing extra to synchronise, and a replay reproduces every line word for word.
+ * One line per blow: a blow's action event carries what it dealt and the moments it made, so the
+ * damage event that follows it says nothing. The copy lives in narration-lines.js; this file only
+ * chooses a line and appends the numbers, so every line formats them the same way.
+ *
+ * The phrase is chosen by hashing the event itself, not by drawing from the battle's random
+ * stream. That means both clients render identical text from identical events with nothing extra
+ * to synchronise, and a replay reproduces every line word for word.
  */
 
 import { hashSeed } from './rng.js';
+import { LINES } from './narration-lines.js';
+import { GRAZE_FRACTION, BIG_HIT_FRACTION, ROUT_FRACTION, CLOSE_FRACTION } from './constants.js';
 
 /** Deterministic choice from a list, keyed by the event. */
 function pick(list, key) {
   return list[hashSeed(key) % list.length];
 }
 
-/**
- * A set name if the robot has one, otherwise a plain fallback. Never prints undefined.
- *
- * A fully synced robot is named after its own set, so naive interpolation produces
- * "Dominus finds the gap in Dominus AI's Dominus plating". When the adjective only
- * repeats the robot's name it is dropped; a distinctive set still earns its mention.
- */
-function part(fighter, slot, fallback) {
-  const name = fighter?.sets?.[slot];
-  if (!name) return fallback;
-  const own = String(fighter?.name ?? '');
-  if (own === name || own.startsWith(`${name} `)) return fallback;
-  return `${name} ${fallback}`;
+/** Which moment a line is about when a hit made several: the rarest and most dramatic first. */
+const MOMENT_ORDER = ['comeback', 'quarter', 'streak', 'half', 'firstBlood'];
+
+const rounded = (value) => Math.round(Number(value) || 0);
+
+/** "sentence — 84", or the sentence alone when nothing was dealt or the amount is unknown. */
+function withAmount(text, amount) {
+  return rounded(amount) > 0 ? `${text} — ${rounded(amount)}` : text;
 }
 
-const STRIKE = [
-  (f, o) => `${f.name} drives the ${part(f, 'weapon', 'blade')} into ${o.name}'s guard.`,
-  (f) => `${f.name} pivots on its ${part(f, 'legs', 'legs')} and strikes clean.`,
-  (f) => `A short, brutal exchange — ${f.name} lands first.`,
-  (f, o) => `${f.name} finds the gap in ${o.name}'s ${part(o, 'torso', 'plating')}.`,
-];
+/** Graze, solid or crushing, by the share of the target's max HP. Unknown sizes read as solid. */
+function sizeOf(amount, target) {
+  const maxHp = Number(target?.maxHp);
+  const dealt = Number(amount);
+  if (!Number.isFinite(dealt) || !(maxHp > 0)) return 'solid';
+  if (dealt >= maxHp * BIG_HIT_FRACTION) return 'crushing';
+  if (dealt < maxHp * GRAZE_FRACTION) return 'graze';
+  return 'solid';
+}
 
-const OVERLOAD = [
-  (f) => `${f.name} commits everything to one swing of the ${part(f, 'weapon', 'blade')}.`,
-  (f) => `The ${part(f, 'back', 'reactor')} screams as ${f.name} overloads.`,
-  (f) => `${f.name} throws its whole frame behind the blow.`,
-];
+/** Rout, clear or close, by the winner's remaining share of HP. Unknown reads as clear. */
+function marginOf(winner) {
+  const share = Number(winner?.hp) / Number(winner?.maxHp);
+  if (!Number.isFinite(share)) return 'clear';
+  if (share > ROUT_FRACTION) return 'rout';
+  if (share < CLOSE_FRACTION) return 'close';
+  return 'clear';
+}
 
-const GUARD = [
-  (f) => `${f.name} braces behind its ${part(f, 'torso', 'plating')}.`,
-  (f) => `${f.name} holds, conserving power.`,
-  (f) => `${f.name} tucks in and waits.`,
-];
+function narrateBlow(event, self, other, key) {
+  if (event.action === 'heavy') return null; // its exchange tells the whole swing
+  if (event.evaded) return { text: pick(LINES.evaded, key)(self, other), tone: 'action' };
+  if (event.action === 'guard') return { text: pick(LINES.guard, key)(self, other), tone: 'action' };
+  if (event.action === 'surge') {
+    const set = LINES.surge[self.element] ?? LINES.surgeAny;
+    return { text: withAmount(pick(set, key)(self, other), event.amount), tone: 'crit' };
+  }
+  const moment = MOMENT_ORDER.find((id) => Array.isArray(event.moments) && event.moments.includes(id));
+  if (moment) return { text: withAmount(pick(LINES.moment[moment], key)(self, other), event.amount), tone: 'crit' };
+  const size = sizeOf(event.amount, other);
+  return {
+    text: withAmount(pick(LINES.blow[size], key)(self, other), event.amount),
+    tone: size === 'crushing' ? 'crit' : 'action',
+  };
+}
 
-const SURGE = [
-  (f) => `${f.name} channels ${f.element} through the ${part(f, 'weapon', 'core')} and releases it.`,
-  (f) => `${f.element} floods the arena as ${f.name} surges.`,
-];
-
-const TELEGRAPH = [
-  (f) => `${f.name} drops its shoulder and the ${part(f, 'weapon', 'blade')} begins to glow —`,
-  (f) => `${f.name} winds up. Something big is coming —`,
-];
-
-const EVADED = [
-  (f, o) => `${o.name} is not there any more — the blow finds empty air.`,
-  (f, o) => `${o.name} slips aside at the last instant.`,
-];
-
-const STATUS_TEXT = {
-  burn: (f) => `Fire catches in ${f.name}'s ${part(f, 'torso', 'plating')}. It is burning.`,
-  freeze: (f) => `Ice locks ${f.name}'s joints solid — it is frozen in place.`,
-  shock: (f) => `Current arcs across ${f.name}'s armour. Its guard is failing.`,
-  gust: (f) => `Wind coils around ${f.name}. It is hard to pin down.`,
-  quake: (f) => `The ground bucks and ${f.name} is left staggering.`,
-  drench: (f) => `Water floods ${f.name}'s systems and bleeds its charge away.`,
-};
+function narrateExchange(event, fighters, key) {
+  const pair = Array.isArray(fighters) ? fighters : [];
+  let sentence = null;
+  if (event.source === 'heavy') {
+    const by = event.by === 1 ? 1 : 0;
+    const answer = event.stances?.[by === 0 ? 'b' : 'a'];
+    const set = LINES.heavy[answer];
+    if (set && pair[by] && pair[1 - by]) sentence = pick(set, key)(pair[by], pair[1 - by]);
+  } else {
+    const set = LINES.read[`${event.stances?.a}-${event.stances?.b}`];
+    if (set && pair[0] && pair[1]) sentence = pick(set, key)(pair[0], pair[1]);
+  }
+  if (!sentence) return null;
+  const hits = (Array.isArray(event.hits) ? event.hits : [])
+    .filter((hit) => rounded(hit.amount) > 0)
+    .map((hit) => `${rounded(hit.amount)} to ${pair[hit.fighter]?.name ?? 'its target'}`);
+  return { text: hits.length > 0 ? `${sentence} — ${hits.join(', ')}` : sentence, tone: 'crit' };
+}
 
 /**
  * @param {object} event an event emitted by battle.step
@@ -86,57 +99,56 @@ export function narrate(event, fighters) {
     case 'fightStart':
       return { text: 'The arena goes live.', tone: 'system' };
 
-    case 'action': {
-      if (!self) return null;
-      if (event.evaded) return { text: pick(EVADED, key)(self, other), tone: 'action' };
-      if (event.action === 'guard') return { text: pick(GUARD, key)(self, other), tone: 'action' };
-      if (event.action === 'overload') return { text: pick(OVERLOAD, key)(self, other), tone: 'crit' };
-      if (event.action === 'surge') return { text: pick(SURGE, key)(self, other), tone: 'crit' };
-      if (event.action === 'telegraph') return { text: pick(TELEGRAPH, key)(self, other), tone: 'crit' };
-      return { text: pick(STRIKE, key)(self, other), tone: 'action' };
-    }
+    case 'action':
+      return self ? narrateBlow(event, self, other, key) : null;
+
+    case 'exchange':
+      return narrateExchange(event, fighters, key);
 
     case 'damage': {
       if (!self) return null;
-      const amount = Math.round(event.amount);
-      if (event.source === 'burn') {
-        return { text: `Burn eats through ${self.name}'s armour. ${amount}.`, tone: 'status' };
-      }
-      if (event.source === 'exchange') {
-        return { text: `${self.name} takes it full on. ${amount}.`, tone: 'crit' };
-      }
-      return { text: `${amount} damage to ${self.name}.`, tone: 'action' };
+      // A blow's and an exchange's damage is already in their own line.
+      if (event.source === 'action' || event.source === 'exchange') return null;
+      if (event.source === 'burn') return { text: withAmount(pick(LINES.burn, key)(self), event.amount), tone: 'status' };
+      if (event.source === 'clash') return { text: withAmount(pick(LINES.bonus, key)(self, other), event.amount), tone: 'action' };
+      return { text: `${rounded(event.amount)} damage to ${self.name}.`, tone: 'action' };
     }
 
     case 'status': {
       if (!self) return null;
       if (!event.applied) return { text: `${self.name} shakes it off.`, tone: 'status' };
-      const template = STATUS_TEXT[event.id];
-      return template ? { text: template(self), tone: 'status' } : null;
+      const set = LINES.status[event.id];
+      return set ? { text: pick(set, key)(self), tone: 'status' } : null;
     }
 
-    case 'exchange':
-      return { text: `Blades lock — ${event.stances.a} against ${event.stances.b}.`, tone: 'crit' };
+    case 'omen': {
+      const set = LINES.omen[event.id];
+      return set && self ? { text: pick(set, key)(self, other ?? self), tone: 'omen' } : null;
+    }
 
+    // The omen line came before the event opened, and the feed's clash card names it.
     case 'clashStart':
-      return { text: 'Time slows.', tone: 'system' };
+      return null;
 
     case 'clashEnd': {
+      if (!fighters?.[0] || !fighters?.[1]) return null;
       const leader = event.scores.a === event.scores.b ? null : event.scores.a > event.scores.b ? 0 : 1;
-      if (leader === null) return { text: 'Neither gives an inch.', tone: 'momentum' };
-      return { text: `${fighters[leader].name} seizes the momentum.`, tone: 'momentum' };
+      const set = LINES.clash[event.id];
+      if (!set) {
+        return leader === null
+          ? { text: 'Neither gives an inch.', tone: 'momentum' }
+          : { text: `${fighters[leader].name} takes the moment.`, tone: 'momentum' };
+      }
+      if (leader === null) return { text: pick(set.even, key)(fighters[0], fighters[1]), tone: 'momentum' };
+      return { text: pick(set.won, key)(fighters[leader], fighters[1 - leader]), tone: 'momentum' };
     }
-
-    case 'suddenDeath':
-      return { text: 'Reactors redline. Everything hits harder from here.', tone: 'system' };
 
     case 'ko': {
       const winner = fighters?.[event.winner];
       if (!winner) return null;
-      if (event.endReason === 'timeout') {
-        return { text: `Time. ${winner.name} is left standing taller.`, tone: 'ko' };
-      }
-      return { text: `${winner.name} stands over the wreckage.`, tone: 'ko' };
+      if (event.endReason === 'timeout') return { text: LINES.timeout(winner), tone: 'ko' };
+      const loser = fighters?.[event.loser] ?? fighters?.[1 - event.winner] ?? winner;
+      return { text: pick(LINES.ko[marginOf(winner)], key)(winner, loser), tone: 'ko' };
     }
 
     default:

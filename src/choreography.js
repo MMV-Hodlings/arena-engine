@@ -29,10 +29,11 @@ const STATUS_ELEMENT = {
 
 const ACTION_ANIMATION = {
   strike: 'strike',
+  // A heavy swing; 'overload' is the name older recordings used for the same blow.
+  heavy: 'heavy',
   overload: 'heavy',
   surge: 'overload',
   guard: 'guard',
-  telegraph: 'telegraph',
 };
 
 const sideOf = (index) => (index === 0 ? 'a' : index === 1 ? 'b' : null);
@@ -60,7 +61,7 @@ export function choreograph(event, fighters = []) {
       // hit that happened to do nothing.
       if (event.evaded) cues.push(figure(1 - index, 'evade'));
 
-      if (event.action === 'overload') {
+      if (event.action === 'heavy' || event.action === 'overload') {
         cues.push({ kind: 'shake', strength: 2 });
         cues.push({ kind: 'fx', effect: 'shockwave', side, element: pair[index]?.element ?? null });
       }
@@ -94,6 +95,14 @@ export function choreograph(event, fighters = []) {
     case 'status': {
       if (!side || !event.applied) return [];
       return [{ kind: 'fx', effect: 'aura', side, element: STATUS_ELEMENT[event.id] ?? null, status: event.id }];
+    }
+
+    // The hint before an event. The Read's is the heavy wind-up it has always been, held on the
+    // robot winding up; any other event's is a glow in the robot's own element.
+    case 'omen': {
+      if (!side) return [];
+      if (event.id === 'read') return [figure(index, 'telegraph')];
+      return [{ kind: 'fx', effect: 'aura', side, element: pair[index]?.element ?? null }];
     }
 
     case 'clashStart':
