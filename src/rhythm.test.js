@@ -12,7 +12,7 @@ import { planClashInputs } from './ai.js';
 import { hashSeed } from './rng.js';
 import { CLASH_WEIGHTS } from './events/index.js';
 import { OPTIMAL_STANCE_MIX } from './actions.js';
-import { MAX_TICK_STEP_MS, ACTION_CADENCE_MS, MIN_BLOW_GAP_MS, CLASH_CHANCE_RAMP, OMEN_MS } from './constants.js';
+import { MAX_TICK_STEP_MS, ACTION_CADENCE_MS, MIN_BLOW_GAP_MS, CLASH_CHANCE_RAMP, OMEN_MS, REPEAT_WEIGHT_FACTOR } from './constants.js';
 
 const roster = JSON.parse(readFileSync(new URL('../harness/roster.sample.json', import.meta.url), 'utf8'));
 const robot = (i, posture) => ({ ...toFighter(roster[i % roster.length]), posture });
@@ -133,5 +133,29 @@ test('posture balance holds: the same robot in two postures wins between 35% and
       }
     }
     assert.ok(wins / n > 0.35 && wins / n < 0.65, `${p} beat ${q} ${((100 * wins) / n).toFixed(1)}% of ${n}`);
+  }
+});
+
+test('the event that just happened is less likely next, so battles vary, while every event keeps its share', () => {
+  // Owner's request, 2026-10-21: the last event drawn is REPEAT_WEIGHT_FACTOR as likely for the next
+  // draw. Truly random draws repeat 14% of the time; this brings it near 4%.
+  assert.equal(REPEAT_WEIGHT_FACTOR, 0.25);
+  const counts = {};
+  let pairs = 0;
+  let repeats = 0;
+  let n = 0;
+  for (let i = 0; i < 240; i++) {
+    const posture = ['aggressive', 'balanced', 'defensive'][i % 3];
+    const drawn = play(`vary-${i}`, robot(i, posture), robot(i, posture)).events.filter((e) => e.type === 'clashStart').map((e) => e.id);
+    drawn.forEach((id, k) => {
+      counts[id] = (counts[id] ?? 0) + 1;
+      n += 1;
+      if (k > 0) { pairs += 1; if (drawn[k - 1] === id) repeats += 1; }
+    });
+  }
+  assert.ok(repeats / pairs < 0.07, `repeats ${(100 * repeats / pairs).toFixed(1)}%`);
+  const total = Object.values(CLASH_WEIGHTS).reduce((a, b) => a + b, 0);
+  for (const [id, weight] of Object.entries(CLASH_WEIGHTS)) {
+    assert.ok(Math.abs(counts[id] / n - weight / total) < 0.025, `${id}: ${(100 * counts[id] / n).toFixed(1)}%`);
   }
 });

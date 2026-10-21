@@ -63,6 +63,14 @@ export const MIN_BLOW_GAP_MS = 2000;
 export const CLASH_CHANCE_RAMP = Object.freeze([0.3, 0.6, 1]);
 
 /**
+ * How likely the event that just happened is to be drawn again next, against its usual weight
+ * (owner's request, 2026-10-21). Truly random draws repeated the last event 14% of the time, and
+ * about seven battles in ten had a back-to-back repeat, which read as streaky. A quarter brings
+ * repeats to about 4%; every event keeps roughly its share, since each takes its turn being last.
+ */
+export const REPEAT_WEIGHT_FACTOR = 0.25;
+
+/**
  * (pacing design) How long a hint line holds the stage before its event opens. The fight is
  * paused for it: no action resolves between the hint and the event's close. 3s, the owner's call
  * on 2026-10-19 (it was 5s), with the time moved into the briefing below, where the player is

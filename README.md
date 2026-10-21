@@ -42,7 +42,7 @@ Player input during a clash event:
 
 ## Tests
 
-    npm test          # node --test, colocated *.test.js — 293 tests
+    npm test          # node --test, colocated *.test.js — 294 tests
     npm run balance   # pairwise simulation over the roster
     npm run pacing    # events, spacing, battle length and posture balance (battle pacing design)
 
@@ -123,6 +123,8 @@ in `src/constants.js` and `src/battle.js`:
 - **Surge or guard** (2026-10-21). A robot with a surge ready only surges or guards: its strike and
   heavy-swing weights become the surge's (`chooseAction`). A defensive robot holding one guards 2
   less (`READY_GUARD_CUT`), which keeps posture balance where it was (49% / 59% / 61%).
+- **Fewer repeats** (2026-10-21). The event just drawn is `REPEAT_WEIGHT_FACTOR` (a quarter) as likely
+  next (`state.lastClashId`): back-to-back repeats 4% instead of 14%, every event's share unchanged.
 - **No draws** (2026-10-21). An exchange that would knock out both robots spares its winner on 1 HP;
   a tie by stance goes to the robot with more of its health left, then the higher CI
   (`standingLeader`, shared with the time limit).

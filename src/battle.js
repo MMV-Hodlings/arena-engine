@@ -32,7 +32,7 @@ import { CLASH_EVENTS, CLASH_WEIGHTS } from './events/index.js';
 import {
   ENGINE_VERSION, INTRO_MS, MAX_TICK_STEP_MS, MAX_BATTLE_MS,
   SURGE_CHARGES_REQUIRED, BIG_HIT_FRACTION, OMEN_MS, LINE_BEAT_MS,
-  CLASH_CHANCE_RAMP, MIN_BLOW_GAP_MS, LOW_HP_FRACTION,
+  CLASH_CHANCE_RAMP, MIN_BLOW_GAP_MS, LOW_HP_FRACTION, REPEAT_WEIGHT_FACTOR,
 } from './constants.js';
 
 /**
@@ -82,6 +82,8 @@ export function createBattle({ seed, a, b, clashRegistry }) {
     // Whether any damage at all has landed yet: the first hit that deals some is first blood.
     blooded: false,
     reelingClashDone: false,
+    // The last event drawn, made less likely next (REPEAT_WEIGHT_FACTOR).
+    lastClashId: null,
     omen: null,
     clash: null,
     // Events resolved but not yet released: the feed's beats (beats.js), and when its last line lands.
@@ -346,6 +348,7 @@ function run(state, target) {
 function beginOmen(state, id, fighter, events) {
   if (!state.registry.events[id]) return;
   state.omen = { id, fighter, startedAt: state.clockMs, opensAt: state.clockMs + OMEN_MS };
+  state.lastClashId = id;
   state.phase = 'omen';
   events.push({ t: state.clockMs, type: 'omen', id, fighter });
 }
@@ -577,7 +580,10 @@ function maybeStartClash(state, index, events) {
   const step = Math.min(Math.max(state.actionsSinceClash, 1), CLASH_CHANCE_RAMP.length);
   if (!forced && roll.value >= CLASH_CHANCE_RAMP[step - 1]) return;
 
-  const entries = Object.entries(state.registry.weights).filter(([id]) => state.registry.events[id]);
+  // The event that just happened is less likely to come straight back (REPEAT_WEIGHT_FACTOR).
+  const entries = Object.entries(state.registry.weights)
+    .filter(([id]) => state.registry.events[id])
+    .map(([id, weight]) => [id, id === state.lastClashId ? weight * REPEAT_WEIGHT_FACTOR : weight]);
   if (entries.length === 0) return;
   const picked = weightedPick(state.rng, entries);
   state.rng = picked.state;
