@@ -61,6 +61,7 @@ test('a heavy swing settles at once as an exchange, and never telegraphs', () =>
     events.forEach((e, k) => {
       if (e.type !== 'action' || e.action !== 'heavy') return;
       heavies += 1;
+      // Settled in the same moment, and the swing shows with the exchange line that tells it.
       const exchange = events.slice(k + 1).find((x) => x.type === 'exchange');
       assert.equal(exchange.t, e.t);
       assert.equal(exchange.source, 'heavy');

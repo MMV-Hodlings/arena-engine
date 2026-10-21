@@ -42,7 +42,7 @@ Player input during a clash event:
 
 ## Tests
 
-    npm test          # node --test, colocated *.test.js — 278 tests
+    npm test          # node --test, colocated *.test.js — 286 tests
     npm run balance   # pairwise simulation over the roster
     npm run pacing    # events, spacing, battle length and posture balance (battle pacing design)
 
@@ -117,8 +117,18 @@ in `src/constants.js` and `src/battle.js`:
 - **Decisions.** The Read and Power Routing give `DECISION_WINDOW_MS` (15s) and close the
   moment both players have committed (`settled`). A pick is binding, so the early close leaks
   nothing.
-- **No sudden death.** Damage no longer grows with time. `MAX_BATTLE_MS` (15 minutes) is a
-  hidden safety net that no measured battle reaches.
+- **No sudden death.** Damage no longer grows with time. `MAX_BATTLE_MS` (20 minutes since
+  2026-10-21) is a hidden safety net that no measured battle reaches (longest of 15,600 simulated:
+  12m22s, two defensive robots).
+- **The feed's beats** (`src/beats.js`, 2026-10-21). No two lines of the fight land at once. Each
+  resolution is a *moment*; its events are spaced on the battle clock and queued (`state.queue`),
+  then released as the clock reaches them: `LINE_BEAT_MS` (1.5s) between ordinary lines,
+  `HINT_LEAD_MS` (2s) before an event's hint, `RESULT_BEAT_MS` (2s) between an event's result card
+  (`clashEnd`, which narrates nothing), its verdict line (`clashVerdict`) and its effect (a Read's
+  exchange, Tug of War's extra hit). State changes when it happens; only its events wait, and the
+  next action, the event's opening and the end wait for the last line's beat. A decided battle
+  sits in `phase: 'finishing'` until its K.O. line is out, and ends on that line's time, so any
+  tick grid ends it at the same moment.
 - **Narration.** One line per blow: blows and exchanges carry what they dealt and their
   `moments` (`src/moments.js`), and their damage events narrate nothing. All copy lives in
   `src/narration-lines.js`.

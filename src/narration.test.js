@@ -53,7 +53,7 @@ test('an expiring status is narrated quietly or not at all', () => {
 });
 
 test('a momentum swing is called out by name', () => {
-  const line = narrate({ t: 1, type: 'clashEnd', id: 'tugOfWar', scores: { a: 1, b: 0 }, momentum: { a: 1.1, b: 0.9 } }, fighters);
+  const line = narrate({ t: 1, type: 'clashVerdict', id: 'tugOfWar', scores: { a: 1, b: 0 } }, fighters);
   assert.equal(line.tone, 'momentum');
   assert.ok(line.text.includes('Onerion'));
 });
@@ -192,12 +192,14 @@ test('an event opening says nothing; its hint already did', () => {
   assert.equal(narrate({ t: 1, type: 'clashStart', id: 'read', public: { heavyBy: 0 } }, sized), null);
 });
 
-test("a clash result is told in its event's own terms", () => {
+test("a clash result is told in its event's own terms, on its verdict a beat after the result card", () => {
   for (const id of IDS) {
-    const won = narrate({ t: 1, type: 'clashEnd', id, scores: { a: 0.9, b: 0.1 }, momentum: { a: 1.1, b: 0.9 } }, sized);
+    // The close itself is the feed's result card, never a line of its own.
+    assert.equal(narrate({ t: 1, type: 'clashEnd', id, scores: { a: 0.9, b: 0.1 }, momentum: { a: 1.1, b: 0.9 } }, sized), null);
+    const won = narrate({ t: 1, type: 'clashVerdict', id, scores: { a: 0.9, b: 0.1 } }, sized);
     assert.equal(won.tone, 'momentum');
     assert.ok(won.text.includes('Onerion'), `${id}: ${won.text}`);
-    const even = narrate({ t: 1, type: 'clashEnd', id, scores: { a: 0.5, b: 0.5 }, momentum: { a: 1, b: 1 } }, sized);
+    const even = narrate({ t: 1, type: 'clashVerdict', id, scores: { a: 0.5, b: 0.5 } }, sized);
     assert.ok(LINES.clash[id].even.map((template) => template(sized[0], sized[1])).includes(even.text), `${id}: ${even.text}`);
     for (const template of [...LINES.clash[id].won, ...LINES.clash[id].even]) {
       assert.ok(!/seizes the momentum/i.test(template(sized[0], sized[1])), id);

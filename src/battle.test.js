@@ -168,8 +168,8 @@ test('there is no sudden death', () => {
   assert.equal(events.filter((e) => e.type === 'suddenDeath').length, 0);
 });
 
-test('the hidden limit is fifteen minutes', () => {
-  assert.equal(MAX_BATTLE_MS, 900_000);
+test('the hidden limit is twenty minutes, clear of the longest battles the feed beats make', () => {
+  assert.equal(MAX_BATTLE_MS, 1_200_000);
 });
 
 test('a knockout never leaves an omen or a clash open', () => {

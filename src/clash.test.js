@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert';
 import { createBattle, step } from './battle.js';
 import { toFighter } from './stats.js';
-import { MAX_TICK_STEP_MS, MOMENTUM_SHIFT, OMEN_MS, BRIEFING_MS } from './constants.js';
+import { MAX_TICK_STEP_MS, MOMENTUM_SHIFT, OMEN_MS, BRIEFING_MS, LINE_BEAT_MS } from './constants.js';
 import { read } from './events/read.js';
 
 const fighter = (over = {}) =>
@@ -234,7 +234,8 @@ test('two guards bank a Surge charge each instead of nothing happening', () => {
     state = result.state;
   }
 
-  const after = advanceUntil(state, (s) => s.phase !== 'clash');
+  // The charges arrive with the exchange, two beats after the result card (beats.js).
+  const after = advanceUntil(state, (s, seen) => seen.some((e) => e.type === 'exchange'));
   const surges = after.events.filter((e) => e.type === 'surge');
 
   assert.equal(surges.length, 2, 'both robots bank a charge');
@@ -341,7 +342,7 @@ test('a commit at the last moment of the window closes it once', () => {
 
 // Deferred minor #9: the push-back is the whole pause, the hint included. Asserted directly,
 // because MIN_BLOW_GAP_MS alone would hide a push measured from the window's opening instead.
-test('both gauges are pushed back by the whole pause, from the hint to the close', () => {
+test('both gauges are pushed back by the whole pause, from the hint to the close, and wait out its last line', () => {
   let { state } = advanceUntil(battleWith(scripted({ a: 0.5, b: 0.5 })), (s) => s.phase === 'omen');
   const before = state.fighters.map((f) => f.nextActionAt);
   const omenAt = state.omen.startedAt;
@@ -349,5 +350,6 @@ test('both gauges are pushed back by the whole pause, from the hint to the close
   const end = events.find((e) => e.type === 'clashEnd');
   assert.ok(end, 'the event never closed');
   assert.ok(end.t - omenAt >= OMEN_MS, 'the pause should include the hint');
-  assert.deepEqual(after.fighters.map((f) => f.nextActionAt), before.map((at) => at + (end.t - omenAt)));
+  // The fight resumes a beat after the event's last line, never sooner (beats.js).
+  assert.deepEqual(after.fighters.map((f) => f.nextActionAt), before.map((at) => Math.max(at + (end.t - omenAt), after.lastLineAt + LINE_BEAT_MS)));
 });

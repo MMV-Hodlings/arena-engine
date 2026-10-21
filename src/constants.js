@@ -79,6 +79,19 @@ export const OMEN_MS = 3000;
 export const BRIEFING_MS = 5000;
 
 /**
+ * The feed's beats (owner's request, 2026-10-21): no two lines of the fight land at once. When one
+ * moment produces several lines — a blow and the status it ends, a blow and the hint it draws, an
+ * event's result and its effect — each after the first is released a beat later on the battle
+ * clock, and nothing else happens until the last has had its beat. LINE_BEAT_MS between ordinary
+ * lines; HINT_LEAD_MS before an event's hint, so the blow that drew it can be taken in first;
+ * RESULT_BEAT_MS between an event's result card, its verdict line and its effect (a Read's
+ * exchange, Tug of War's extra hit). The state changes when it happens; only its lines wait.
+ */
+export const LINE_BEAT_MS = 1500;
+export const HINT_LEAD_MS = 2000;
+export const RESULT_BEAT_MS = 2000;
+
+/**
  * (pacing design) The window for the two decision events, the Read and Power Routing. Either
  * closes the moment both players have committed, so fifteen seconds is a ceiling, not a wait.
  */
@@ -102,10 +115,11 @@ export const MAX_TICK_STEP_MS = 250;
 /**
  * Hard ceiling on battle length, after which the engine declares a result regardless. A hidden
  * safety net, not a mechanic: sudden death is gone (pacing design), and battles end because every
- * robot keeps landing damage. Fifteen minutes, up from ten, because the longest simulated battle
- * (two defensive robots) ran about ten.
+ * robot keeps landing damage. Twenty minutes (2026-10-21), up from fifteen when the feed's beats
+ * lengthened every battle: across 15,600 simulated battles the longest (two defensive robots) ran
+ * 12m22s, and players who take a whole decision window add about half a minute more.
  */
-export const MAX_BATTLE_MS = 900_000;
+export const MAX_BATTLE_MS = 1_200_000;
 
 /** Intro beat before the fighting starts: banners, VS flash, sprite entrances. */
 export const INTRO_MS = 3000;

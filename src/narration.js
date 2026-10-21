@@ -156,7 +156,11 @@ export function narrate(event, fighters) {
     case 'clashStart':
       return null;
 
-    case 'clashEnd': {
+    // The result card is the feed's; the verdict in words comes a beat later, on its own event.
+    case 'clashEnd':
+      return null;
+
+    case 'clashVerdict': {
       if (!fighters?.[0] || !fighters?.[1]) return null;
       const leader = event.scores.a === event.scores.b ? null : event.scores.a > event.scores.b ? 0 : 1;
       const set = LINES.clash[event.id];

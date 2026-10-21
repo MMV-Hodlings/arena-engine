@@ -17,6 +17,7 @@ import { hashSeed, nextRandom } from './rng.js';
 import { deriveCombat, combatIndex } from './stats.js';
 import { rollDamage } from './damage.js';
 import { statusForElement } from './elements.js';
+import { isFeedLine, spaceMoment } from './beats.js';
 import { hitMoments } from './moments.js';
 import { MOMENTUM_START } from './momentum.js';
 import {
@@ -30,7 +31,7 @@ import { weightedPick } from './rng.js';
 import { CLASH_EVENTS, CLASH_WEIGHTS } from './events/index.js';
 import {
   ENGINE_VERSION, INTRO_MS, MAX_TICK_STEP_MS, MAX_BATTLE_MS,
-  SURGE_CHARGES_REQUIRED, BIG_HIT_FRACTION, OMEN_MS,
+  SURGE_CHARGES_REQUIRED, BIG_HIT_FRACTION, OMEN_MS, LINE_BEAT_MS,
   CLASH_CHANCE_RAMP, MIN_BLOW_GAP_MS, LOW_HP_FRACTION,
 } from './constants.js';
 
@@ -83,6 +84,10 @@ export function createBattle({ seed, a, b, clashRegistry }) {
     reelingClashDone: false,
     omen: null,
     clash: null,
+    // Events resolved but not yet released: the feed's beats (beats.js), and when its last line lands.
+    queue: [],
+    lastLineAt: null,
+    lastBlowAt: null,
     registry: {
       events: clashRegistry?.events ?? CLASH_EVENTS,
       weights: clashRegistry?.weights ?? CLASH_WEIGHTS,
@@ -216,10 +221,71 @@ function cloneState(state) {
     })),
     omen: state.omen ? { ...state.omen } : null,
     clash: state.clash ? { ...state.clash } : null,
+    queue: state.queue ? [...state.queue] : [],
   };
 }
 
 function advanceTo(state, target, events) {
+  state.queue ??= [];
+  // The battle is decided and only its last lines are left: release them, then end.
+  if (state.phase === 'finishing') {
+    const last = state.queue.at(-1)?.t ?? target;
+    release(state, target, events);
+    if (state.queue.length > 0) {
+      state.clockMs = target;
+      return;
+    }
+    // It ends on its K.O. line, not on whichever tick reached it, so a replay ticked on another
+    // grid ends at the same moment.
+    state.clockMs = last;
+    state.phase = 'ended';
+    return;
+  }
+  run(state, target);
+  release(state, target, events);
+  // A battle decided with lines still to come keeps running until they are out (see beats.js).
+  if (state.phase === 'ended' && state.queue.length > 0) state.phase = 'finishing';
+}
+
+/** Releases every queued event due by `upTo`, in order. */
+function release(state, upTo, out) {
+  while (state.queue.length > 0 && state.queue[0].t <= upTo) out.push(state.queue.shift());
+}
+
+/**
+ * One moment of the fight: whatever `resolve` produces at the current battle time, spread into
+ * beats (beats.js) and queued for release. Nothing else may happen until the moment's last line has
+ * had its beat: the next action waits, and a hint's event opens a hint's length after the hint.
+ */
+function moment(state, resolve) {
+  const raw = [];
+  resolve(raw);
+  if (raw.length === 0) return;
+  const fighters = state.fighters;
+  const hasLine = raw.some((event) => isFeedLine(event, fighters));
+  const base = hasLine && state.lastLineAt != null ? Math.max(state.clockMs, state.lastLineAt + LINE_BEAT_MS) : state.clockMs;
+  const spaced = spaceMoment(raw, base, fighters);
+  for (const event of spaced) {
+    if (isFeedLine(event, fighters)) state.lastLineAt = event.t;
+    if (event.type === 'action') state.lastBlowAt = event.t;
+  }
+  state.queue.push(...spaced);
+  state.queue.sort((x, y) => x.t - y.t);
+
+  const omen = spaced.find((event) => event.type === 'omen');
+  if (omen && state.omen) {
+    state.omen.hintAt = omen.t;
+    state.omen.opensAt = omen.t + OMEN_MS;
+  }
+  // Blows stay MIN_BLOW_GAP_MS apart as the feed shows them, not only as they resolve: a blow whose
+  // line waited behind another (a Burn tick before it) holds the next one back by as much.
+  if (state.phase === 'fighting' && state.lastLineAt != null) {
+    const earliest = Math.max(state.lastLineAt + LINE_BEAT_MS, (state.lastBlowAt ?? -Infinity) + MIN_BLOW_GAP_MS);
+    for (const fighter of state.fighters) fighter.nextActionAt = Math.max(fighter.nextActionAt, earliest);
+  }
+}
+
+function run(state, target) {
   // The omen: a hint holds the stage, the fight paused, until its event opens.
   if (state.phase === 'omen') {
     if (target < state.omen.opensAt) {
@@ -227,7 +293,7 @@ function advanceTo(state, target, events) {
       return;
     }
     state.clockMs = state.omen.opensAt;
-    openClash(state, events);
+    moment(state, (events) => openClash(state, events));
   }
 
   // Bullet time: the fight is frozen until the event's window closes.
@@ -238,7 +304,7 @@ function advanceTo(state, target, events) {
       return;
     }
     state.clockMs = clash.endsAt;
-    resolveClash(state, events);
+    moment(state, (events) => resolveClash(state, events));
     if (state.phase === 'ended') return;
   }
 
@@ -254,7 +320,7 @@ function advanceTo(state, target, events) {
     state.fighters[0].nextActionAt = first.value;
     state.fighters[1].nextActionAt = second.value;
     state.rng = second.state;
-    events.push({ t: state.clockMs, type: 'fightStart' });
+    moment(state, (events) => events.push({ t: state.clockMs, type: 'fightStart' }));
   }
 
   // Resolve every action whose gauge filled inside this slice, in time order.
@@ -264,13 +330,13 @@ function advanceTo(state, target, events) {
     if (due.length === 0) break;
     const index = due[0];
     state.clockMs = Math.max(state.clockMs, state.fighters[index].nextActionAt);
-    resolveAction(state, index, events);
+    moment(state, (events) => resolveAction(state, index, events));
   }
 
   if (state.phase !== 'fighting') return;
   state.clockMs = target;
 
-  if (state.clockMs >= MAX_BATTLE_MS) endByTimeout(state, events);
+  if (state.clockMs >= MAX_BATTLE_MS) moment(state, (events) => endByTimeout(state, events));
 }
 
 /**
@@ -352,6 +418,10 @@ function resolveClash(state, events) {
     applyBuff(state, 0, outcome.buffs.a, events);
     applyBuff(state, 1, outcome.buffs.b, events);
   }
+
+  // The verdict in words follows the result card a beat later (beats.js), and the event's effect a
+  // beat after that.
+  events.push({ t: state.clockMs, type: 'clashVerdict', id: clash.id, scores });
 
   state.phase = 'fighting';
   // The fight was paused from the omen to the close, briefing included.
