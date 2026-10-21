@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert';
-import { ACTION_MULT, chooseAction, resolveStances } from './actions.js';
+import { ACTION_MULT, chooseAction, resolveStances, READY_GUARD_CUT } from './actions.js';
 import { hashSeed } from './rng.js';
 
 const ctx = (over = {}) => ({
@@ -132,4 +132,48 @@ test('the triangle is symmetric however the arguments are ordered', () => {
   assert.equal(reverse.outcome, 'b');
   assert.equal(reverse.b.damageMult, forward.a.damageMult);
   assert.equal(reverse.a.damageMult, forward.b.damageMult);
+});
+
+test('a robot with a surge ready only surges or guards: every attack it makes is the surge', () => {
+  for (const posture of ['aggressive', 'balanced', 'defensive']) {
+    let state = hashSeed(`ready-${posture}`);
+    const seen = { surge: 0, guard: 0, strike: 0, heavy: 0 };
+    for (let i = 0; i < 4000; i++) {
+      const chosen = chooseAction(state, ctx({ posture, surgeCharges: 3 }));
+      state = chosen.state;
+      seen[chosen.value] += 1;
+    }
+    assert.equal(seen.strike, 0, posture);
+    assert.equal(seen.heavy, 0, posture);
+    assert.ok(seen.surge > 0 && seen.guard > 0, posture);
+  }
+});
+
+test('with a surge ready, a robot attacks as often as its posture always did, only with the surge', () => {
+  // Balanced posture: strike 5 + heavy 2 against guard 2, so the surge is 7 in 9.
+  let state = hashSeed('ready-share');
+  let surges = 0;
+  const draws = 20000;
+  for (let i = 0; i < draws; i++) {
+    const chosen = chooseAction(state, ctx({ posture: 'balanced', surgeCharges: 3 }));
+    state = chosen.state;
+    if (chosen.value === 'surge') surges += 1;
+  }
+  assert.ok(Math.abs(surges / draws - 7 / 9) < 0.02, `${surges / draws}`);
+});
+
+test('a defensive robot holding a surge stops waiting on it: it guards half as much as it otherwise would', () => {
+  // Defensive is strike 4 + heavy 1 against guard 4; ready, the guard drops by READY_GUARD_CUT (2),
+  // so the surge is 5 in 7. Without it, every other posture cashed its surges in far faster and
+  // balanced beat defensive 64% of the time; with it, 61%, as before the surge-or-guard rule.
+  assert.equal(READY_GUARD_CUT.defensive, 2);
+  let state = hashSeed('ready-defensive');
+  let surges = 0;
+  const draws = 20000;
+  for (let i = 0; i < draws; i++) {
+    const chosen = chooseAction(state, ctx({ posture: 'defensive', surgeCharges: 3 }));
+    state = chosen.state;
+    if (chosen.value === 'surge') surges += 1;
+  }
+  assert.ok(Math.abs(surges / draws - 5 / 7) < 0.02, `${surges / draws}`);
 });

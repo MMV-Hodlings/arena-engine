@@ -41,9 +41,17 @@ const POSTURE_WEIGHTS = Object.freeze({
   defensive: { strike: 4, heavy: 1, guard: 4 },
 });
 
-/** Extra weight on guard when reeling, and the weight surge takes when it is available. */
+/** Extra weight on guard when reeling. */
 const LOW_HP_GUARD_BONUS = 4;
-const SURGE_WEIGHT = 6;
+
+/**
+ * How much less a robot holding a surge guards, by posture. With a surge ready a robot only surges
+ * or guards, so the attacking postures cash their surges in at once while a defensive one, guarding
+ * 4 times in 9, sat on its own: balanced beat defensive 64% of the time. Taking 2 off defensive's
+ * guard while it holds a surge (5 surges in 7) restores the balance the design measured before this
+ * rule: 49% / 59% / 61% over 780 battles a matchup (2026-10-21).
+ */
+export const READY_GUARD_CUT = Object.freeze({ defensive: 2 });
 
 /**
  * @param {number} state rng state
@@ -61,7 +69,12 @@ export function chooseAction(state, ctx) {
 
   const surgeReady =
     ctx.surgeCharges >= SURGE_CHARGES_REQUIRED && normalizeElement(ctx.element) !== NEUTRAL;
-  if (surgeReady) weights.surge = SURGE_WEIGHT;
+  // A robot with a surge ready either unleashes it or guards (owner's call, 2026-10-21): every
+  // attack it would have made, strike or heavy swing, becomes the surge, at the posture's own odds.
+  if (surgeReady) {
+    const guard = Math.max(0, weights.guard - (READY_GUARD_CUT[ctx.posture] ?? 0));
+    return weightedPick(state, [['surge', weights.strike + weights.heavy], ['guard', guard]]);
+  }
 
   return weightedPick(state, Object.entries(weights));
 }

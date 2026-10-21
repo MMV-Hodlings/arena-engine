@@ -353,3 +353,55 @@ test('both gauges are pushed back by the whole pause, from the hint to the close
   // The fight resumes a beat after the event's last line, never sooner (beats.js).
   assert.deepEqual(after.fighters.map((f) => f.nextActionAt), before.map((at) => Math.max(at + (end.t - omenAt), after.lastLineAt + LINE_BEAT_MS)));
 });
+
+// ── No draws: an exchange that would knock both robots out (owner's call, 2026-10-21) ──
+
+/** A Read open with both robots on the given HP, then the two stances committed and the battle run to its end. */
+function readToTheEnd({ hpA, hpB, a, b }) {
+  let { state } = advanceUntil(battleWith(read), (s) => s.phase === 'clash' && s.clockMs >= s.clash.startedAt);
+  state = { ...state, fighters: state.fighters.map((f, i) => ({ ...f, hp: i === 0 ? hpA : hpB })) };
+  state = step(state, { type: 'clashInput', player: 'a', payload: { stance: a }, atMs: state.clockMs + 100 }).state;
+  state = step(state, { type: 'clashInput', player: 'b', payload: { stance: b }, atMs: state.clockMs + 100 }).state;
+  return advanceUntil(state, (s) => s.phase === 'ended');
+}
+
+test('a Read that would knock out both robots leaves its winner standing on 1 HP', () => {
+  // The owner's example: A on 5 HP overloads into B's guard on 7 HP. Both hits would be lethal; A won
+  // the exchange, so A survives on 1 HP and B, taking its full hit, is the only one to fall.
+  const { state, events } = readToTheEnd({ hpA: 5, hpB: 7, a: 'overload', b: 'guard' });
+  assert.equal(state.phase, 'ended');
+  assert.equal(state.winner, 0);
+  assert.equal(state.fighters[0].hp, 1);
+  assert.equal(state.fighters[1].hp, 0);
+  const kos = events.filter((e) => e.type === 'ko');
+  assert.equal(kos.length, 1);
+  assert.deepEqual([kos[0].winner, kos[0].loser], [0, 1]);
+  // The exchange is told with the damage that actually landed.
+  const exchange = events.find((e) => e.type === 'exchange');
+  assert.equal(exchange.hits.find((h) => h.fighter === 0).amount, 4);
+});
+
+test('it is the winner who survives, whichever seat it is in', () => {
+  const { state } = readToTheEnd({ hpA: 7, hpB: 5, a: 'guard', b: 'overload' });
+  assert.equal(state.winner, 1);
+  assert.equal(state.fighters[1].hp, 1);
+  assert.equal(state.fighters[0].hp, 0);
+});
+
+test('a tied Read that would knock out both: the robot with more of its health left survives', () => {
+  // Same stance on both sides, no winner by stance: the timeout's own tie-break decides.
+  const { state } = readToTheEnd({ hpA: 5, hpB: 9, a: 'overload', b: 'overload' });
+  assert.equal(state.winner, 1);
+  assert.equal(state.fighters[1].hp, 1);
+  assert.equal(state.fighters[0].hp, 0);
+});
+
+test('an exchange that knocks out only one robot is untouched: the other takes its full hit', () => {
+  // A strikes into B's guard on 1 HP: the counter finishes A, and B, far from lethal, takes the parried hit in full.
+  const { state, events } = readToTheEnd({ hpA: 1, hpB: 2000, a: 'strike', b: 'guard' });
+  assert.equal(state.winner, 1);
+  assert.equal(state.fighters[0].hp, 0);
+  const taken = events.find((e) => e.type === 'exchange').hits.find((h) => h.fighter === 1).amount;
+  assert.ok(taken > 0);
+  assert.equal(state.fighters[1].hp, 2000 - taken);
+});

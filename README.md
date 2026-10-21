@@ -42,7 +42,7 @@ Player input during a clash event:
 
 ## Tests
 
-    npm test          # node --test, colocated *.test.js — 286 tests
+    npm test          # node --test, colocated *.test.js — 293 tests
     npm run balance   # pairwise simulation over the roster
     npm run pacing    # events, spacing, battle length and posture balance (battle pacing design)
 
@@ -119,7 +119,13 @@ in `src/constants.js` and `src/battle.js`:
   nothing.
 - **No sudden death.** Damage no longer grows with time. `MAX_BATTLE_MS` (20 minutes since
   2026-10-21) is a hidden safety net that no measured battle reaches (longest of 15,600 simulated:
-  12m22s, two defensive robots).
+  13m34s, two defensive robots).
+- **Surge or guard** (2026-10-21). A robot with a surge ready only surges or guards: its strike and
+  heavy-swing weights become the surge's (`chooseAction`). A defensive robot holding one guards 2
+  less (`READY_GUARD_CUT`), which keeps posture balance where it was (49% / 59% / 61%).
+- **No draws** (2026-10-21). An exchange that would knock out both robots spares its winner on 1 HP;
+  a tie by stance goes to the robot with more of its health left, then the higher CI
+  (`standingLeader`, shared with the time limit).
 - **The feed's beats** (`src/beats.js`, 2026-10-21). No two lines of the fight land at once. Each
   resolution is a *moment*; its events are spaced on the battle clock and queued (`state.queue`),
   then released as the clock reaches them: `LINE_BEAT_MS` (1.5s) between ordinary lines,

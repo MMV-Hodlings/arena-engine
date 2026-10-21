@@ -494,6 +494,15 @@ function runExchange(state, exchange, events, { source, by }) {
     state.rng = roll.state;
     hits.push({ target: 1 - index, amount: roll.value });
   }
+  // No draws (owner's call, 2026-10-21): when both hits would knock their robots out, the exchange's
+  // winner is spared on 1 HP and only the loser falls. A tie by stance is settled the way the time
+  // limit settles one: the robot with more of its health left, then the higher Combat Index.
+  if (hits.length === 2 && hits.every((hit) => hit.amount >= state.fighters[hit.target].hp)) {
+    const survivor = resolved.outcome === 'a' ? 0 : resolved.outcome === 'b' ? 1 : standingLeader(state);
+    const spared = hits.find((hit) => hit.target === survivor);
+    spared.amount = Math.max(0, state.fighters[survivor].hp - 1);
+  }
+
   // Each hit's part in the story, worked out before any of them lands: what it dealt and the
   // moments it made. When both robots hit each other, neither is on a run.
   const mutual = hits.length === 2 && hits.every((hit) => hit.amount > 0);
@@ -772,14 +781,19 @@ function applyDamage(state, index, amount, source, events) {
   }
 }
 
-/** The hard ceiling. Highest HP fraction wins; an exact tie goes to the higher CI, then to A. */
-function endByTimeout(state, events) {
+/** Who is ahead on standing: the higher share of max HP, then the higher CI, then A. */
+function standingLeader(state) {
   const [a, b] = state.fighters;
   const fractionA = a.hp / a.maxHp;
   const fractionB = b.hp / b.maxHp;
-  let winner = 0;
-  if (fractionB > fractionA) winner = 1;
-  else if (fractionB === fractionA && b.ci > a.ci) winner = 1;
+  if (fractionB > fractionA) return 1;
+  if (fractionB === fractionA && b.ci > a.ci) return 1;
+  return 0;
+}
+
+/** The hard ceiling. Highest HP fraction wins; an exact tie goes to the higher CI, then to A. */
+function endByTimeout(state, events) {
+  const winner = standingLeader(state);
 
   state.phase = 'ended';
   state.winner = winner;
