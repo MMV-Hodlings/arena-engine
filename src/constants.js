@@ -123,11 +123,20 @@ export const MAX_TICK_STEP_MS = 250;
 /**
  * Hard ceiling on battle length, after which the engine declares a result regardless. A hidden
  * safety net, not a mechanic: sudden death is gone (pacing design), and battles end because every
- * robot keeps landing damage. Twenty minutes (2026-10-21), up from fifteen when the feed's beats
- * lengthened every battle: across 15,600 simulated battles the longest (two defensive robots) ran
- * 12m22s, and players who take a whole decision window add about half a minute more.
+ * robot keeps landing damage. Twenty-five minutes (2026-10-21), up from twenty when guarding began to
+ * double defence: across 15,600 simulated battles the longest (two defensive robots) ran 17m44s,
+ * and players who take a whole decision window add about half a minute more.
  */
-export const MAX_BATTLE_MS = 1_200_000;
+export const MAX_BATTLE_MS = 1_500_000;
+
+/**
+ * A guard on a robot's own turn multiplies its defence by this against the next strike or surge
+ * that hits it, until that hit lands or the robot acts again (owner's call, 2026-10-21; before, a
+ * guard only banked a Surge charge). Measured over 780 battles a matchup, it evens the postures:
+ * aggressive beats balanced 46%, defensive 50%, and balanced beats defensive 57% (from 46/59/60).
+ * Heavy swings and Reads keep their own guard stance and ignore it.
+ */
+export const GUARD_DEFENSE_MULT = 2;
 
 /** Intro beat before the fighting starts: banners, VS flash, sprite entrances. */
 export const INTRO_MS = 3000;

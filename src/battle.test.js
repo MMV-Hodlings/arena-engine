@@ -100,7 +100,9 @@ test('a mirror match takes roughly ten landed hits per side', () => {
     createBattle({ seed: 'mirror', a: fighter(), b: fighter({ asset_id: '2' }) }),
   );
   const hits = events.filter((e) => e.type === 'damage' && (e.source === 'action' || e.source === 'exchange') && e.amount > 0);
-  assert.ok(hits.length >= 12 && hits.length <= 28, `mirror match landed ${hits.length} hits in total`);
+  // Since a guard doubles defence against the next hit (2026-10-21), a mirror lands ~24 hits, up from
+  // ~23 (300 mirrors: 95th percentile 29, before 28), so the ceiling moved from 28 to 32.
+  assert.ok(hits.length >= 12 && hits.length <= 32, `mirror match landed ${hits.length} hits in total`);
 });
 
 test('pacing holds at every tier, not just mid CP', () => {
@@ -113,7 +115,7 @@ test('pacing holds at every tier, not just mid CP', () => {
       }),
     );
     const hits = events.filter((e) => e.type === 'damage' && (e.source === 'action' || e.source === 'exchange') && e.amount > 0);
-    assert.ok(hits.length >= 12 && hits.length <= 28, `cp ${cp} landed ${hits.length} hits`);
+    assert.ok(hits.length >= 12 && hits.length <= 32, `cp ${cp} landed ${hits.length} hits`);
   }
 });
 
@@ -168,8 +170,8 @@ test('there is no sudden death', () => {
   assert.equal(events.filter((e) => e.type === 'suddenDeath').length, 0);
 });
 
-test('the hidden limit is twenty minutes, clear of the longest battles the feed beats make', () => {
-  assert.equal(MAX_BATTLE_MS, 1_200_000);
+test('the hidden limit is twenty-five minutes, clear of the longest battles a stronger guard makes', () => {
+  assert.equal(MAX_BATTLE_MS, 1_500_000);
 });
 
 test('a knockout never leaves an omen or a clash open', () => {

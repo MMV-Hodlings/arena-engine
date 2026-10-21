@@ -42,7 +42,7 @@ Player input during a clash event:
 
 ## Tests
 
-    npm test          # node --test, colocated *.test.js — 294 tests
+    npm test          # node --test, colocated *.test.js — 298 tests
     npm run balance   # pairwise simulation over the roster
     npm run pacing    # events, spacing, battle length and posture balance (battle pacing design)
 
@@ -117,9 +117,12 @@ in `src/constants.js` and `src/battle.js`:
 - **Decisions.** The Read and Power Routing give `DECISION_WINDOW_MS` (15s) and close the
   moment both players have committed (`settled`). A pick is binding, so the early close leaks
   nothing.
-- **No sudden death.** Damage no longer grows with time. `MAX_BATTLE_MS` (20 minutes since
+- **No sudden death.** Damage no longer grows with time. `MAX_BATTLE_MS` (25 minutes since
   2026-10-21) is a hidden safety net that no measured battle reaches (longest of 15,600 simulated:
-  13m34s, two defensive robots).
+  17m44s, two defensive robots).
+- **Guarding protects** (2026-10-21). A guard on a robot's turn doubles its defence
+  (`GUARD_DEFENSE_MULT`) against the next strike or surge that hits it, until that hit or its next
+  action (`fighter.guarded`). Heavy swings and Reads ignore it. Posture balance 46% / 50% / 57%.
 - **Surge or guard** (2026-10-21). A robot with a surge ready only surges or guards: its strike and
   heavy-swing weights become the surge's (`chooseAction`). A defensive robot holding one guards 2
   less (`READY_GUARD_CUT`), which keeps posture balance where it was (49% / 59% / 61%).

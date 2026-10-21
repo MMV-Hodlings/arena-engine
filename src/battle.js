@@ -32,7 +32,7 @@ import { CLASH_EVENTS, CLASH_WEIGHTS } from './events/index.js';
 import {
   ENGINE_VERSION, INTRO_MS, MAX_TICK_STEP_MS, MAX_BATTLE_MS,
   SURGE_CHARGES_REQUIRED, BIG_HIT_FRACTION, OMEN_MS, LINE_BEAT_MS,
-  CLASH_CHANCE_RAMP, MIN_BLOW_GAP_MS, LOW_HP_FRACTION, REPEAT_WEIGHT_FACTOR,
+  CLASH_CHANCE_RAMP, MIN_BLOW_GAP_MS, LOW_HP_FRACTION, REPEAT_WEIGHT_FACTOR, GUARD_DEFENSE_MULT,
 } from './constants.js';
 
 /**
@@ -593,6 +593,8 @@ function maybeStartClash(state, index, events) {
 function resolveAction(state, index, events) {
   const attacker = state.fighters[index];
   const defender = state.fighters[1 - index];
+  // A robot's guard lasts until it acts again.
+  attacker.guarded = false;
 
   // Burn bites at the start of the burning robot's own action.
   const burn = burnDamage(attacker.statuses, attacker.maxHp);
@@ -614,6 +616,8 @@ function resolveAction(state, index, events) {
   attacker.actionsTaken += 1;
 
   if (action === 'guard') {
+    // Braced: double defence against the next strike or surge that hits it (GUARD_DEFENSE_MULT).
+    attacker.guarded = true;
     attacker.surge += 1;
     events.push({ t: state.clockMs, type: 'action', fighter: index, action: 'guard' });
     events.push({ t: state.clockMs, type: 'surge', fighter: index, charges: attacker.surge });
@@ -650,9 +654,12 @@ function resolveAction(state, index, events) {
 
   const buff = attacker.pendingBuff ?? {};
   const defenderBuff = defender.pendingBuff ?? {};
+  // The guard takes this hit, landed or dodged, and is gone.
+  const guard = defender.guarded ? GUARD_DEFENSE_MULT : 1;
+  defender.guarded = false;
   const roll = rollDamage(state.rng, {
     atk: attacker.combat.atk,
-    def: effectiveDefense(defender.statuses, defender.combat.def) * (defenderBuff.defMult ?? 1),
+    def: effectiveDefense(defender.statuses, defender.combat.def) * (defenderBuff.defMult ?? 1) * guard,
     actionMult: actionMult * (buff.atkMult ?? 1),
     momentum: attacker.momentum,
   });
